@@ -278,6 +278,102 @@ function fileToBase64(blob) {
 </script>
 
 <style scoped>
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  height: 100%;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.header-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1A1A1A;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  background: #E8E5E0;
+  border-radius: 20px;
+  font-size: 12px;
+  color: #555;
+  align-self: flex-start;
+}
+
+.stats-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stats-row {
+  display: flex;
+  gap: 12px;
+}
+
+.stat-card {
+  flex: 1;
+  background: #FFFFFF;
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.chart-placeholder {
+  width: 100%;
+  height: 60px;
+  background: #F0EDE8;
+  border-radius: 6px;
+}
+
+.card-title {
+  font-size: 13px;
+  color: #888;
+}
+
+.card-link {
+  font-size: 12px;
+  color: #3B82F6;
+  text-decoration: none;
+}
+
+.card-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1A1A1A;
+}
+
+.card-label {
+  font-size: 13px;
+  color: #888;
+}
+
+.transcript-box {
+  background: #FFFFFF;
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  flex: 1;
+}
+
+.transcript-label {
+  display: block;
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 8px;
+}
+
 .transcript-text {
   font-size: 14px;
   color: #1A1A1A;
@@ -292,6 +388,7 @@ function fileToBase64(blob) {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-top: 8px;
   animation: blink 1s ease-in-out infinite;
 }
 

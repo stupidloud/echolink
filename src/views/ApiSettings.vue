@@ -136,11 +136,59 @@ async function save() {
 </script>
 
 <style scoped>
+.api-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 520px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.input-wrapper {
+  position: relative;
+}
+
+.form-input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  color: #1A1A1A;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-input:focus {
+  border-color: #2563EB;
+}
+
 .input-hint {
   font-size: 11px;
   color: #888;
   margin-top: 4px;
   display: block;
+}
+
+.select-wrapper {
+  position: relative;
 }
 
 .form-select {
@@ -153,12 +201,39 @@ async function save() {
   color: #1A1A1A;
   appearance: none;
   cursor: pointer;
+  outline: none;
+}
+
+.form-select:focus {
+  border-color: #2563EB;
+}
+
+.select-icon {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: #888;
+  pointer-events: none;
+}
+
+.eye-icon {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: #888;
+  cursor: pointer;
 }
 
 .actions {
   display: flex;
   gap: 12px;
-  margin-top: 20px;
+  margin-top: 4px;
 }
 
 .test-btn {
@@ -203,7 +278,7 @@ async function save() {
 
 .result-msg {
   font-size: 13px;
-  margin-top: 12px;
+  margin-top: 4px;
 }
 .result-msg.success {
   color: #16A34A;
