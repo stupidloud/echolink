@@ -19,9 +19,9 @@
             v-model="form.baseUrl"
             type="text"
             class="form-input"
-            placeholder="https://api.stepfun.com"
+            placeholder="https://api.stepfun.com/v1"
           />
-          <span class="input-hint">请输入到域名，不含具体 API 路径（如 /v1）</span>
+          <span class="input-hint">可输入到 /v1 层级，如 https://api.stepfun.com/v1</span>
         </div>
       </div>
 

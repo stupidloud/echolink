@@ -21,6 +21,15 @@ fn db_conn() -> Result<rusqlite::Connection, String> {
     rusqlite::Connection::open(path).map_err(|e| e.to_string())
 }
 
+fn api_url(base: &str, path: &str) -> String {
+    let base = base.trim_end_matches('/');
+    if base.ends_with("/v1") {
+        format!("{}{}", base, path.trim_start_matches("/v1"))
+    } else {
+        format!("{}{}", base, path)
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[allow(unused_variables)]
@@ -235,7 +244,7 @@ async fn delete_history(_app: tauri::AppHandle, id: String) -> Result<(), String
 #[tauri::command]
 async fn transcribe_audio(audio_b64: String, settings: AppSettings) -> Result<String, String> {
     let client = reqwest::Client::new();
-    let url = format!("{}/v1/audio/transcriptions", settings.base_url.trim_end_matches('/'));
+    let url = api_url(&settings.base_url, "/v1/audio/transcriptions");
     let audio_bytes = base64::decode(&audio_b64).map_err(|e| e.to_string())?;
     let part = reqwest::multipart::Part::bytes(audio_bytes)
         .file_name("audio.webm")
@@ -305,7 +314,7 @@ struct StepFunSseEvent {
 #[tauri::command]
 async fn transcribe_audio_sse(audio_b64: String, settings: AppSettings, app: tauri::AppHandle) -> Result<String, String> {
     let client = reqwest::Client::new();
-    let url = format!("{}/v1/audio/asr/sse", settings.base_url.trim_end_matches('/'));
+    let url = api_url(&settings.base_url, "/v1/audio/asr/sse");
 
     let body = StepFunAsrRequest {
         audio: StepFunAudio {
@@ -448,7 +457,7 @@ fn get_app_version() -> String {
 #[tauri::command]
 async fn verify_connection(settings: AppSettings) -> Result<String, String> {
     let client = reqwest::Client::new();
-    let url = format!("{}/v1/models", settings.base_url.trim_end_matches('/'));
+    let url = api_url(&settings.base_url, "/v1/models");
 
     let resp = client
         .get(&url)

@@ -263,6 +263,10 @@ body {
   height: 8px;
   background: #C8B496;
   border-radius: 2px;
+  transition: height 0.3s;
+}
+
+.recording .bar {
   animation: wave 0.8s ease-in-out infinite alternate;
 }
 
