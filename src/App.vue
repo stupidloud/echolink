@@ -4,7 +4,7 @@
     <aside class="sidebar">
       <div class="sidebar-top">
         <div class="app-icon"></div>
-        <span class="app-title">语音输入法 / Typeless</span>
+        <span class="app-title">Echolink</span>
       </div>
 
       <nav class="sidebar-menu">
@@ -29,8 +29,8 @@
           <HelpCircle class="icon-btn" />
         </div>
         <div class="pro-card">
-          <p class="pro-text">Pro版本试用中：已使用 6 天 / 共 30 天</p>
-          <button class="upgrade-btn">升级</button>
+          <p class="pro-text">按住 Right Alt 开始录音，松开停止并转换</p>
+          <button class="upgrade-btn">了解更多</button>
         </div>
       </div>
     </aside>
@@ -41,16 +41,43 @@
     </main>
 
     <!-- Floating Status Bar -->
-    <div class="floating-status">
-      <div class="waveform"></div>
+    <div class="floating-status" :class="{ recording: isRecording }">
+      <div class="waveform">
+        <span v-for="i in 5" :key="i" class="bar" :style="{ animationDelay: `${i * 0.15}s` }"></span>
+      </div>
       <div class="status-light"></div>
-      <span class="status-text">实时流式文本上屏预览...</span>
+      <span class="status-text">{{ statusText }}</span>
     </div>
   </div>
 </template>
 
 <script setup>
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Home, History, Server, Settings, HelpCircle } from 'lucide-vue-next'
+import { listen } from '@tauri-apps/api/event'
+
+const isRecording = ref(false)
+
+const statusText = computed(() => {
+  if (isRecording.value) return '正在录音...'
+  return '按住 Right Alt 开始语音输入'
+})
+
+  let unlisten = null
+
+  onMounted(async () => {
+    try {
+      unlisten = await listen('recording-state', (event) => {
+        isRecording.value = event.payload
+      })
+    } catch {
+      // browser fallback
+    }
+  })
+
+onUnmounted(() => {
+  unlisten?.()
+})
 </script>
 
 <style>
@@ -210,19 +237,38 @@ body {
   left: 50%;
   transform: translateX(-50%);
   background: #1A1A1A;
-  padding: 12px;
+  padding: 12px 20px;
   border-radius: 24px;
   display: flex;
   align-items: center;
   gap: 12px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  transition: background 0.3s;
+}
+
+.floating-status.recording {
+  background: #2A1A1A;
 }
 
 .waveform {
-  width: 120px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
   height: 24px;
-  background: #2A2A2A;
-  border-radius: 4px;
+}
+
+.bar {
+  display: inline-block;
+  width: 4px;
+  height: 8px;
+  background: #C8B496;
+  border-radius: 2px;
+  animation: wave 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes wave {
+  from { height: 4px; opacity: 0.4; }
+  to { height: 20px; opacity: 1; }
 }
 
 .status-light {
@@ -230,10 +276,22 @@ body {
   height: 12px;
   background: #C8B496;
   border-radius: 50%;
+  transition: background 0.3s;
+}
+
+.recording .status-light {
+  background: #EF4444;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 .status-text {
   font-size: 13px;
   color: #E5E2DD;
+  white-space: nowrap;
 }
 </style>

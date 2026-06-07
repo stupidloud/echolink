@@ -11,22 +11,35 @@
       <div class="form-group">
         <label class="form-label">接口基础地址 (Base URL)</label>
         <div class="input-wrapper">
-          <input type="text" class="form-input" placeholder="https://..." />
+          <input
+            v-model="form.baseUrl"
+            type="text"
+            class="form-input"
+            placeholder="https://api.openai.com"
+          />
         </div>
       </div>
 
       <div class="form-group">
         <label class="form-label">鉴权密钥 (API Key)</label>
         <div class="input-wrapper">
-          <input type="password" class="form-input" value="••••••••" />
-          <Eye class="eye-icon" />
+          <input
+            v-model="form.apiKey"
+            :type="showKey ? 'text' : 'password'"
+            class="form-input"
+            placeholder="sk-..."
+          />
+          <Eye
+            class="eye-icon"
+            @click="showKey = !showKey"
+          />
         </div>
       </div>
 
       <div class="form-group">
         <label class="form-label">模型名称 (Model)</label>
         <div class="input-wrapper select-wrapper">
-          <span class="select-value">whisper-1</span>
+          <span class="select-value">{{ form.model }}</span>
           <ChevronDown class="select-icon" />
         </div>
       </div>
@@ -34,119 +47,63 @@
 
     <!-- Save Button -->
     <div class="actions">
-      <button class="save-btn">测试连接并保存</button>
+      <button class="save-btn" @click="save">测试连接并保存</button>
     </div>
+
+    <p v-if="msg" class="result-msg" :class="msgType">{{ msg }}</p>
   </div>
 </template>
 
 <script setup>
+import { ref, onMounted } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
 import { Eye, ChevronDown } from 'lucide-vue-next'
+
+const showKey = ref(false)
+const msg = ref('')
+const msgType = ref('')
+
+const defaultForm = {
+  baseUrl: 'https://api.openai.com',
+  apiKey: '',
+  model: 'gpt-4o-mini-transcribe',
+  protocol: 'openai',
+}
+
+const form = ref({ ...defaultForm })
+
+onMounted(async () => {
+  try {
+    const s = await invoke('get_settings')
+    form.value = s
+  } catch {
+    // browser fallback
+  }
+})
+
+async function save() {
+  msg.value = '正在连接测试...'
+  msgType.value = ''
+  try {
+    await invoke('save_settings', { settings: form.value })
+    msg.value = '✅ 已保存'
+    msgType.value = 'success'
+  } catch (e) {
+    msg.value = `❌ 保存失败: ${e}`
+    msgType.value = 'error'
+  }
+}
 </script>
 
 <style scoped>
-.api-settings {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  max-width: 640px;
+.result-msg {
+  font-size: 13px;
+  margin-top: 8px;
 }
-
-.tabs {
-  display: flex;
-  gap: 0;
+.result-msg.success {
+  color: #16A34A;
 }
-
-.tab {
-  padding: 10px;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  cursor: pointer;
-  background: #E5E2DD;
-  color: #777777;
-}
-
-.tab.active {
-  background: #C8B496;
-  color: #FFFFFF;
-}
-
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.form-label {
-  font-size: 14px;
-  color: #1A1A1A;
-}
-
-.input-wrapper {
-  display: flex;
-  align-items: center;
-  background: #FFFFFF;
-  border: 1px solid #E5E2DD;
-  border-radius: 8px;
-  padding: 10px;
-  gap: 8px;
-}
-
-.form-input {
-  flex: 1;
-  border: none;
-  outline: none;
-  font-size: 14px;
-  background: transparent;
-  color: #1A1A1A;
-}
-
-.form-input::placeholder {
-  color: #777777;
-}
-
-.eye-icon {
-  width: 18px;
-  height: 18px;
-  color: #777777;
-  cursor: pointer;
-}
-
-.select-wrapper {
-  justify-content: space-between;
-  cursor: pointer;
-}
-
-.select-value {
-  font-size: 14px;
-  color: #1A1A1A;
-}
-
-.select-icon {
-  width: 16px;
-  height: 16px;
-  color: #777777;
-}
-
-.actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.save-btn {
-  background: #C8B496;
-  color: #FFFFFF;
-  border: none;
-  padding: 10px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: bold;
-  cursor: pointer;
+.result-msg.error {
+  color: #DC2626;
 }
 </style>

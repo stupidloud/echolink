@@ -17,17 +17,17 @@
           <a href="#" class="card-link">查看报告</a>
         </div>
         <div class="stat-card">
-          <p class="card-value">1 min</p>
+          <p class="card-value">{{ totalMinutes }} min</p>
           <p class="card-label">总口述时间</p>
         </div>
       </div>
       <div class="stats-row">
         <div class="stat-card">
-          <p class="card-value">117 字</p>
+          <p class="card-value">{{ totalChars }} 字</p>
           <p class="card-label">口述字数</p>
         </div>
         <div class="stat-card">
-          <p class="card-value">133 字/分钟</p>
+          <p class="card-value">{{ avgSpeed }} 字/分钟</p>
           <p class="card-label">平均口述速度</p>
         </div>
       </div>
@@ -36,119 +36,84 @@
     <!-- Transcript Box -->
     <div class="transcript-box">
       <label class="transcript-label">最近一次转录结果</label>
-      <p class="transcript-placeholder">等待语音输入...</p>
+      <p class="transcript-text">{{ transcript || '等待语音输入...' }}</p>
+      <div v-if="isRecording" class="recording-indicator">🔴 录音中</div>
     </div>
   </div>
 </template>
 
 <script setup>
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
+
+const isRecording = ref(false)
+const transcript = ref('')
+const historyTexts = ref([])
+
+const totalChars = computed(() => historyTexts.value.reduce((sum, t) => sum + t.length, 0))
+const totalMinutes = computed(() => Math.max(1, Math.round(totalChars.value / 200)))
+const avgSpeed = computed(() => totalMinutes.value > 0 ? Math.round(totalChars.value / totalMinutes.value) : 0)
+
+  let unlisten = null
+
+onMounted(async () => {
+  try {
+    unlisten = await listen<boolean>('recording-state', async (event) => {
+      isRecording.value = event.payload
+      if (!event.payload) {
+        // Released — trigger transcribe + inject
+        await handleTranscribe()
+      }
+    })
+  } catch {
+    // browser fallback
+  }
+})
+
+onUnmounted(() => {
+  unlisten?.()
+})
+
+async function handleTranscribe() {
+  try {
+    const settings = await invoke('get_settings')
+    // In real implementation, audio_b64 comes from Rust recording buffer
+    // For now, placeholder
+    const text = await invoke('transcribe_audio', {
+      audioB64: '',
+      settings,
+    })
+    transcript.value = text
+    await invoke('insert_history', {
+      text,
+      protocol: settings.protocol || 'openai',
+      target_app: '当前应用',
+    })
+    await invoke('inject_text', { text })
+  } catch (e) {
+    console.warn('transcribe failed:', e)
+  }
+}
 </script>
 
 <style scoped>
-.dashboard {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.header {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.header-title {
-  font-family: 'Newsreader', serif;
-  font-size: 28px;
-  font-weight: bold;
+.transcript-text {
+  font-size: 14px;
   color: #1A1A1A;
-  line-height: 1.3;
+  line-height: 1.6;
+  min-height: 60px;
 }
 
-.badge {
-  display: inline-flex;
-  align-items: center;
-  background: #C8B496;
-  color: #FFFFFF;
-  padding: 8px 16px;
-  border-radius: 20px;
+.recording-indicator {
   font-size: 13px;
-  width: fit-content;
-}
-
-.stats-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.stats-row {
-  display: flex;
-  gap: 16px;
-}
-
-.stat-card {
-  flex: 1;
-  background: #FFFFFF;
-  border: 1px solid #E5E2DD;
-  border-radius: 12px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.chart-placeholder {
-  width: 80px;
-  height: 80px;
-  background: #E0E7FF;
-  border-radius: 50%;
-}
-
-.card-title {
-  font-size: 14px;
-  color: #1A1A1A;
-}
-
-.card-link {
-  font-size: 13px;
-  color: #C8B496;
-  text-decoration: none;
-}
-
-.card-link:hover {
-  text-decoration: underline;
-}
-
-.card-value {
-  font-size: 32px;
+  color: #DC2626;
   font-weight: bold;
-  color: #1A1A1A;
+  animation: blink 1s ease-in-out infinite;
 }
 
-.card-label {
-  font-size: 14px;
-  color: #777777;
-}
-
-.transcript-box {
-  background: #FFFFFF;
-  border: 1px solid #E5E2DD;
-  border-radius: 12px;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.transcript-label {
-  font-size: 14px;
-  font-weight: bold;
-  color: #1A1A1A;
-}
-
-.transcript-placeholder {
-  font-size: 14px;
-  color: #777777;
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 </style>
