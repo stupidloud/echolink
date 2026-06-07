@@ -74,7 +74,7 @@ onMounted(async () => {
   try {
     historyTexts.value = (await invoke('get_history', { limit: 99999 })).map(r => r.text)
 
-    unlistens.push(await listen<boolean>('recording-state', async (event) => {
+    unlistens.push(await listen('recording-state', async (event) => {
       isRecording.value = event.payload
       if (event.payload) {
         await startRecording()

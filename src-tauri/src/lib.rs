@@ -32,7 +32,7 @@ fn api_url(base: &str, path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::api_url;
+    use super::*;
 
     #[test]
     fn api_url_keeps_no_v1_base() {
@@ -56,6 +56,60 @@ mod tests {
     fn api_url_handles_no_path_slash() {
         let url = api_url("https://example.com", "v1/models");
         assert_eq!(url, "https://example.com/v1/models");
+    }
+
+    #[test]
+    fn api_url_empty_path() {
+        let url = api_url("https://api.openai.com", "");
+        assert_eq!(url, "https://api.openai.com");
+    }
+
+    #[test]
+    fn api_url_root_path() {
+        let url = api_url("https://api.openai.com/v1", "/");
+        assert_eq!(url, "https://api.openai.com/v1/");
+    }
+
+    #[test]
+    fn api_url_no_v1_in_base_but_path_has_v1() {
+        let url = api_url("https://custom.com", "/v1/chat");
+        assert_eq!(url, "https://custom.com/v1/chat");
+    }
+
+    #[test]
+    fn app_settings_defaults() {
+        let s = AppSettings::default();
+        assert_eq!(s.base_url, "https://api.stepfun.com");
+        assert_eq!(s.model, "stepaudio-2.5-asr");
+        assert_eq!(s.protocol, "stepfun");
+        assert!(s.api_key.is_empty());
+    }
+
+    #[test]
+    fn app_settings_deserialize_camel_case() {
+        let json = r#"{"baseUrl":"https://oai.com","apiKey":"sk-xxx","model":"whisper-1","protocol":"openai"}"#;
+        let s: AppSettings = serde_json::from_str(json).unwrap();
+        assert_eq!(s.base_url, "https://oai.com");
+        assert_eq!(s.api_key, "sk-xxx");
+        assert_eq!(s.model, "whisper-1");
+        assert_eq!(s.protocol, "openai");
+    }
+
+    #[test]
+    fn app_settings_serialize_camel_case() {
+        let s = AppSettings {
+            base_url: "https://test.com".into(),
+            api_key: "key".into(),
+            model: "m".into(),
+            protocol: "p".into(),
+        };
+        let json = serde_json::to_string(&s).unwrap();
+        assert!(json.contains("\"baseUrl\""));
+        assert!(json.contains("\"apiKey\""));
+        assert!(json.contains("\"model\""));
+        assert!(json.contains("\"protocol\""));
+        assert!(!json.contains("\"base_url\""));
+        assert!(!json.contains("\"api_key\""));
     }
 }
 

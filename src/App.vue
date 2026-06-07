@@ -78,7 +78,7 @@ const statusText = computed(() => {
     }
     try {
       unlistenLevel = await listen('audio-level', (event) => {
-        const level = event.payload as number
+        const level = event.payload
         barHeights.value = Array.from({ length: 5 }, () =>
           Math.max(4, Math.min(24, 4 + level * 40 + Math.random() * 8))
         )
