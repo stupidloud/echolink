@@ -139,112 +139,118 @@ async function save() {
 .api-settings {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  max-width: 520px;
+  gap: 24px;
+  max-width: 640px;
+}
+
+.tabs {
+  display: flex;
+  gap: 0;
+}
+
+.tab {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  background: #E5E2DD;
+  color: #777777;
+}
+
+.tab.active {
+  background: #C8B496;
+  color: #FFFFFF;
 }
 
 .form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .form-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: #374151;
+  font-size: 14px;
+  color: #1A1A1A;
 }
 
 .input-wrapper {
-  position: relative;
+  display: flex;
+  align-items: center;
+  background: #FFFFFF;
+  border: 1px solid #E5E2DD;
+  border-radius: 8px;
+  padding: 10px;
+  gap: 8px;
 }
 
 .form-input {
-  width: 100%;
-  padding: 8px 12px;
-  font-size: 14px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  color: #1A1A1A;
+  flex: 1;
+  border: none;
   outline: none;
-  transition: border-color 0.2s;
-}
-
-.form-input:focus {
-  border-color: #2563EB;
-}
-
-.input-hint {
-  font-size: 11px;
-  color: #888;
-  margin-top: 4px;
-  display: block;
-}
-
-.select-wrapper {
-  position: relative;
-}
-
-.form-select {
-  width: 100%;
-  padding: 8px 32px 8px 12px;
   font-size: 14px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: white;
+  background: transparent;
   color: #1A1A1A;
-  appearance: none;
-  cursor: pointer;
-  outline: none;
 }
 
-.form-select:focus {
-  border-color: #2563EB;
-}
-
-.select-icon {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 16px;
-  height: 16px;
-  color: #888;
-  pointer-events: none;
+.form-input::placeholder {
+  color: #777777;
 }
 
 .eye-icon {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  color: #777777;
+  cursor: pointer;
+}
+
+.select-wrapper {
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.form-select {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  background: transparent;
+  color: #1A1A1A;
+  cursor: pointer;
+  padding: 0;
+}
+
+.select-value {
+  font-size: 14px;
+  color: #1A1A1A;
+}
+
+.select-icon {
   width: 16px;
   height: 16px;
-  color: #888;
-  cursor: pointer;
+  color: #777777;
 }
 
 .actions {
   display: flex;
   gap: 12px;
-  margin-top: 4px;
+  justify-content: flex-end;
 }
 
 .test-btn {
-  padding: 10px 20px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
   background: white;
-  color: #374151;
+  color: #1A1A1A;
+  border: 1px solid #E5E2DD;
+  padding: 10px 16px;
+  border-radius: 8px;
   font-size: 14px;
   cursor: pointer;
-  transition: background 0.2s;
 }
 
 .test-btn:hover:not(:disabled) {
@@ -257,18 +263,18 @@ async function save() {
 }
 
 .save-btn {
-  padding: 10px 20px;
+  background: #C8B496;
+  color: #FFFFFF;
   border: none;
-  border-radius: 6px;
-  background: #2563EB;
-  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
   font-size: 14px;
+  font-weight: bold;
   cursor: pointer;
-  transition: background 0.2s;
 }
 
 .save-btn:hover:not(:disabled) {
-  background: #1D4ED8;
+  opacity: 0.9;
 }
 
 .save-btn:disabled {
@@ -278,12 +284,18 @@ async function save() {
 
 .result-msg {
   font-size: 13px;
-  margin-top: 4px;
 }
 .result-msg.success {
   color: #16A34A;
 }
 .result-msg.error {
   color: #DC2626;
+}
+
+.input-hint {
+  font-size: 11px;
+  color: #888;
+  margin-top: 2px;
+  display: block;
 }
 </style>

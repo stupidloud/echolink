@@ -281,97 +281,104 @@ function fileToBase64(blob) {
 .dashboard {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  height: 100%;
+  gap: 24px;
 }
 
 .header {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .header-title {
-  font-size: 20px;
-  font-weight: 600;
+  font-family: 'Newsreader', serif;
+  font-size: 28px;
+  font-weight: bold;
   color: #1A1A1A;
+  line-height: 1.3;
 }
 
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 6px 14px;
-  background: #E8E5E0;
+  background: #C8B496;
+  color: #FFFFFF;
+  padding: 8px 16px;
   border-radius: 20px;
-  font-size: 12px;
-  color: #555;
-  align-self: flex-start;
+  font-size: 13px;
+  width: fit-content;
 }
 
 .stats-grid {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .stats-row {
   display: flex;
-  gap: 12px;
+  gap: 16px;
 }
 
 .stat-card {
   flex: 1;
   background: #FFFFFF;
-  border-radius: 10px;
-  padding: 16px;
+  border: 1px solid #E5E2DD;
+  border-radius: 12px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  gap: 12px;
 }
 
 .chart-placeholder {
-  width: 100%;
-  height: 60px;
-  background: #F0EDE8;
-  border-radius: 6px;
+  width: 80px;
+  height: 80px;
+  background: #E0E7FF;
+  border-radius: 50%;
 }
 
 .card-title {
-  font-size: 13px;
-  color: #888;
+  font-size: 14px;
+  color: #1A1A1A;
 }
 
 .card-link {
-  font-size: 12px;
-  color: #3B82F6;
+  font-size: 13px;
+  color: #C8B496;
   text-decoration: none;
 }
 
+.card-link:hover {
+  text-decoration: underline;
+}
+
 .card-value {
-  font-size: 28px;
-  font-weight: 700;
+  font-size: 32px;
+  font-weight: bold;
   color: #1A1A1A;
 }
 
 .card-label {
-  font-size: 13px;
-  color: #888;
+  font-size: 14px;
+  color: #777777;
 }
 
 .transcript-box {
   background: #FFFFFF;
-  border-radius: 10px;
+  border: 1px solid #E5E2DD;
+  border-radius: 12px;
   padding: 16px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   flex: 1;
 }
 
 .transcript-label {
-  display: block;
-  font-size: 12px;
-  color: #888;
-  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: bold;
+  color: #1A1A1A;
 }
 
 .transcript-text {
@@ -388,7 +395,7 @@ function fileToBase64(blob) {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 4px;
   animation: blink 1s ease-in-out infinite;
 }
 
