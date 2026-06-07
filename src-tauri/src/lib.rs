@@ -68,14 +68,18 @@ pub fn run() {
                 .menu(&menu)
                 .on_menu_event(move |app, event| match event.id().as_ref() {
                     "show" => {
-                        if let Some(w) = app.get_webview("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
+                        for (label, w) in app.webview_windows() {
+                            if label == "main" {
+                                let _ = w.show();
+                                let _ = w.set_focus();
+                            }
                         }
                     }
                     "hide" => {
-                        if let Some(w) = app.get_webview("main") {
-                            let _ = w.hide();
+                        for (label, w) in app.webview_windows() {
+                            if label == "main" {
+                                let _ = w.hide();
+                            }
                         }
                     }
                     "quit" => {
@@ -91,9 +95,11 @@ pub fn run() {
                     } = event
                     {
                         let app = tray.app_handle();
-                        if let Some(w) = app.get_webview("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
+                        for (label, w) in app.webview_windows() {
+                            if label == "main" {
+                                let _ = w.show();
+                                let _ = w.set_focus();
+                            }
                         }
                     }
                 })
