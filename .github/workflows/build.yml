@@ -1,0 +1,53 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Tauri CLI
+        run: npm install -D @tauri-apps/cli@latest
+
+      - name: Tauri build (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: npm run tauri build || npx tauri build
+        env:
+          TARGET: x86_64-unknown-linux-gnu
+
+      - name: Tauri build (macOS)
+        if: matrix.os == 'macos-latest'
+        run: npm run tauri build || npx tauri build
+        env:
+          TARGET: x86_64-apple-darwin
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: echolink-${{ matrix.os }}
+          path: src-tauri/target/release/bundle/**
