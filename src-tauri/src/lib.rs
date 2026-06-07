@@ -2,10 +2,11 @@ use std::sync::Mutex;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter,
+    Manager, Emitter,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_store::StoreExt;
+use tauri_plugin_shell::ShellExt;
 
 #[derive(Default)]
 struct AppState {
@@ -500,7 +501,3 @@ async fn verify_connection(settings: AppSettings) -> Result<String, String> {
     }
 }
 
-#[tauri::command]
-fn get_app_version() -> String {
-    env!("CARGO_PKG_VERSION").to_string()
-}
