@@ -6,7 +6,6 @@ use tauri::{
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_store::StoreExt;
-use tauri_plugin_shell::ShellExt;
 
 #[derive(Default)]
 struct AppState {
@@ -68,18 +67,14 @@ pub fn run() {
                 .menu(&menu)
                 .on_menu_event(move |app, event| match event.id().as_ref() {
                     "show" => {
-                        for (label, w) in app.webview_windows() {
-                            if label == "main" {
-                                let _ = w.show();
-                                let _ = w.set_focus();
-                            }
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.set_focus();
                         }
                     }
                     "hide" => {
-                        for (label, w) in app.webview_windows() {
-                            if label == "main" {
-                                let _ = w.hide();
-                            }
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.hide();
                         }
                     }
                     "quit" => {
@@ -95,11 +90,9 @@ pub fn run() {
                     } = event
                     {
                         let app = tray.app_handle();
-                        for (label, w) in app.webview_windows() {
-                            if label == "main" {
-                                let _ = w.show();
-                                let _ = w.set_focus();
-                            }
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.set_focus();
                         }
                     }
                 })
@@ -428,13 +421,13 @@ async fn inject_text(app: tauri::AppHandle, text: String) -> Result<(), String> 
 
     #[cfg(target_os = "macos")]
     {
-        let _ = app.shell().command("osascript")
+        let _ = std::process::Command::new("osascript")
             .args(["-e", "tell application \"System Events\" to keystroke \"v\" using command down"])
             .spawn();
     }
     #[cfg(target_os = "windows")]
     {
-        let _ = app.shell().command("powershell")
+        let _ = std::process::Command::new("powershell")
             .args(["-Command", "(New-Object -ComObject WScript.Shell).SendKeys('^v')"])
             .spawn();
     }
