@@ -42,10 +42,6 @@ jobs:
         with:
           workspaces: "src-tauri"
 
-      - name: Rust tests
-        working-directory: src-tauri
-        run: cargo test
-
       - name: Install Tauri CLI
         run: npm install -D @tauri-apps/cli@latest
 

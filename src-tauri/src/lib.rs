@@ -23,10 +23,16 @@ fn db_conn() -> Result<rusqlite::Connection, String> {
 
 fn api_url(base: &str, path: &str) -> String {
     let base = base.trim_end_matches('/');
-    if base.ends_with("/v1") {
-        format!("{}{}", base, path.trim_start_matches("/v1"))
+    let path = path.trim_start_matches('/');
+
+    let base_last = base.split('/').last().unwrap_or("");
+    let path_first = path.split('/').next().unwrap_or("");
+
+    if !base_last.is_empty() && base_last == path_first {
+        let rest = path.strip_prefix(base_last).unwrap_or("");
+        format!("{}{}", base, rest)
     } else {
-        format!("{}{}", base, path)
+        format!("{}/{}", base, path)
     }
 }
 
@@ -41,9 +47,15 @@ mod tests {
     }
 
     #[test]
-    fn api_url_strips_duplicate_v1() {
+    fn api_url_strips_any_duplicate_segment() {
         let url = api_url("https://api.stepfun.com/v1", "/v1/audio/asr/sse");
         assert_eq!(url, "https://api.stepfun.com/v1/audio/asr/sse");
+    }
+
+    #[test]
+    fn api_url_strips_v1beta_duplicate() {
+        let url = api_url("https://api.gemini.com/v1beta", "/v1beta/models");
+        assert_eq!(url, "https://api.gemini.com/v1beta/models");
     }
 
     #[test]
@@ -53,15 +65,15 @@ mod tests {
     }
 
     #[test]
-    fn api_url_handles_no_path_slash() {
+    fn api_url_adds_slash_when_no_common_segment() {
         let url = api_url("https://example.com", "v1/models");
-        assert_eq!(url, "https://example.comv1/models");
+        assert_eq!(url, "https://example.com/v1/models");
     }
 
     #[test]
     fn api_url_empty_path() {
         let url = api_url("https://api.openai.com", "");
-        assert_eq!(url, "https://api.openai.com");
+        assert_eq!(url, "https://api.openai.com/");
     }
 
     #[test]
