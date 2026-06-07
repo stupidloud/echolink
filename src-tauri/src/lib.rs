@@ -203,6 +203,11 @@ pub fn run() {
                 .build(app)
                 .expect("failed to build tray icon");
 
+            // Start minimized to tray
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.hide();
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
