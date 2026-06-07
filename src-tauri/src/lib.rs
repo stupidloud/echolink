@@ -2,11 +2,9 @@ use std::sync::Mutex;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, Emitter,
+    Emitter,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
-use tauri_plugin_store::StoreExt;
-use enigo::{Enigo, Keyboard, Direction, Key};
 
 #[derive(Default)]
 struct AppState {
@@ -29,12 +27,36 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build())
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
+            use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+
+            let ralt = Shortcut::new(Some(Modifiers::ALT), Code::AltRight);
+
+            app.handle().plugin(
+                tauri_plugin_global_shortcut::Builder::new()
+                    .with_handler(move |_app, shortcut, event| {
+                        if shortcut == &ralt {
+                            match event.state() {
+                                ShortcutState::Pressed => {
+                                    let _ = _app.emit("recording-state", "started");
+                                }
+                                ShortcutState::Released => {
+                                    let _ = _app.emit("recording-state", "stopped");
+                                }
+                            }
+                        }
+                    })
+                    .build(),
+            )?;
+
+            if let Err(e) = app.global_shortcut().register(ralt) {
+                eprintln!("Failed to register RAlt shortcut: {}", e);
+            }
+
             let show = MenuItemBuilder::with_id("show", "显示 Echolink").build(app).unwrap();
             let hide = MenuItemBuilder::with_id("hide", "隐藏").build(app).unwrap();
             let quit = MenuItemBuilder::with_id("quit", "退出").build(app).unwrap();
@@ -75,12 +97,6 @@ pub fn run() {
                 })
                 .build(app)
                 .expect("failed to build tray icon");
-
-            // Register global shortcut Right Alt (push-to-talk)
-            let ralt = Shortcut::new(Some(Modifiers::ALT), Code::AltRight);
-            if let Err(e) = app.global_shortcut().register(ralt) {
-                eprintln!("Failed to register RAlt shortcut: {}", e);
-            }
 
             Ok(())
         })
