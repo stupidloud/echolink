@@ -11,6 +11,15 @@ struct AppState {
     is_recording: bool,
 }
 
+fn db_conn() -> Result<rusqlite::Connection, String> {
+    let path = dirs::data_dir()
+        .ok_or_else(|| "cannot get data dir".to_string())?
+        .join("echolink")
+        .join("echolink.db");
+    std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+    rusqlite::Connection::open(path).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let state = Mutex::new(AppState::default());
@@ -19,7 +28,6 @@ pub fn run() {
         .plugin(tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
@@ -138,12 +146,12 @@ struct HistoryRow {
 }
 
 #[tauri::command]
-async fn get_history(app: tauri::AppHandle, limit: Option<i32>) -> Result<Vec<HistoryRow>, String> {
+async fn get_history(
+    _app: tauri::AppHandle,
+    limit: Option<i32>,
+) -> Result<Vec<HistoryRow>, String> {
     let limit = limit.unwrap_or(50);
-    let conn = app
-        .db("sqlite:echolink.db")
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "no db connection".to_string())?;
+    let conn = db_conn()?;
     let mut stmt = conn
         .prepare(
             "SELECT id, timestamp, text, protocol, target_app FROM history ORDER BY timestamp DESC LIMIT ?1",
@@ -167,15 +175,12 @@ async fn get_history(app: tauri::AppHandle, limit: Option<i32>) -> Result<Vec<Hi
 
 #[tauri::command]
 async fn insert_history(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     text: String,
     protocol: String,
     target_app: String,
 ) -> Result<(), String> {
-    let conn = app
-        .db("sqlite:echolink.db")
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "no db connection".to_string())?;
+    let conn = db_conn()?;
     conn.execute(
         "CREATE TABLE IF NOT EXISTS history (id TEXT PRIMARY KEY, timestamp TEXT, text TEXT, protocol TEXT, target_app TEXT)",
         [],
@@ -196,11 +201,8 @@ async fn insert_history(
 }
 
 #[tauri::command]
-async fn delete_history(app: tauri::AppHandle, id: String) -> Result<(), String> {
-    let conn = app
-        .db("sqlite:echolink.db")
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "no db connection".to_string())?;
+async fn delete_history(_app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let conn = db_conn()?;
     conn.execute("DELETE FROM history WHERE id = ?1", [id])
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -234,13 +236,10 @@ async fn transcribe_audio(audio_b64: String, settings: Settings) -> Result<Strin
 
 #[tauri::command]
 async fn inject_text(text: String) -> Result<(), String> {
-    use enigo::{Enigo, KeyboardControllable, Key};
-    let mut enigo = Enigo::new();
-    for ch in text.chars() {
-        if let Ok(key) = Key::from_char(ch) {
-            let _ = enigo.key_click(key);
-        }
-    }
+    use enigo::{Enigo, TextControllable, Settings};
+    let settings = Settings::default();
+    let mut enigo = Enigo::new(&settings).map_err(|e| e.to_string())?;
+    enigo.text(&text).map_err(|e| e.to_string())?;
     Ok(())
 }
 
