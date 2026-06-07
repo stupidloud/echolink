@@ -135,7 +135,7 @@ async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Result<(
     store
         .set("settings", serde_json::to_value(settings).map_err(|e| e.to_string())?)
         .map_err(|e| e.to_string())?;
-    store.save().map_err(|e| e.to_string())?;
+    store.save();
     Ok(())
 }
 
