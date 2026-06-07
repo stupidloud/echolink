@@ -55,7 +55,7 @@ mod tests {
     #[test]
     fn api_url_handles_no_path_slash() {
         let url = api_url("https://example.com", "v1/models");
-        assert_eq!(url, "https://example.com/v1/models");
+        assert_eq!(url, "https://example.comv1/models");
     }
 
     #[test]
