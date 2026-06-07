@@ -5,6 +5,8 @@ use tauri::{
     Manager, Emitter,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_store::StoreExt;
+use enigo::{Enigo, Keyboard, Settings};
 
 #[derive(Default)]
 struct AppState {
@@ -22,6 +24,7 @@ fn db_conn() -> Result<rusqlite::Connection, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[allow(unused_variables)]
     let state = Mutex::new(AppState::default());
 
     tauri::Builder::default()
@@ -236,7 +239,6 @@ async fn transcribe_audio(audio_b64: String, settings: Settings) -> Result<Strin
 
 #[tauri::command]
 async fn inject_text(text: String) -> Result<(), String> {
-    use enigo::{Enigo, TextControllable, Settings};
     let settings = Settings::default();
     let mut enigo = Enigo::new(&settings).map_err(|e| e.to_string())?;
     enigo.text(&text).map_err(|e| e.to_string())?;

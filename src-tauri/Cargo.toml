@@ -32,6 +32,7 @@ tauri-plugin-notification = "2"
 reqwest = { version = "0.12", features = ["json", "rustls-tls", "multipart"], default-features = false }
 tokio = { version = "1", features = ["full"] }
 base64 = "0.22"
+rusqlite = { version = "0.32", features = ["bundled"] }
 enigo = { version = "0.3", features = ["serde"] }
 dirs = "6"
 uuid = { version = "1", features = ["v4"] }
