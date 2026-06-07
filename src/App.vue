@@ -43,7 +43,7 @@
     <!-- Floating Status Bar -->
     <div class="floating-status" :class="{ recording: isRecording }">
       <div class="waveform">
-        <span v-for="i in 5" :key="i" class="bar" :style="{ animationDelay: `${i * 0.15}s` }"></span>
+        <span v-for="(h, i) in barHeights" :key="i" class="bar" :style="{ height: h + 'px', animationDelay: `${i * 0.15}s` }"></span>
       </div>
       <div class="status-light"></div>
       <span class="status-text">{{ statusText }}</span>
@@ -57,6 +57,7 @@ import { Home, History, Server, Settings, HelpCircle } from 'lucide-vue-next'
 import { listen } from '@tauri-apps/api/event'
 
 const isRecording = ref(false)
+const barHeights = ref([8, 8, 8, 8, 8])
 
 const statusText = computed(() => {
   if (isRecording.value) return '正在录音...'
@@ -64,20 +65,33 @@ const statusText = computed(() => {
 })
 
   let unlisten = null
+  let unlistenLevel = null
 
   onMounted(async () => {
     try {
       unlisten = await listen('recording-state', (event) => {
         isRecording.value = event.payload
+        if (!event.payload) barHeights.value = [8, 8, 8, 8, 8]
+      })
+    } catch {
+      // browser fallback
+    }
+    try {
+      unlistenLevel = await listen('audio-level', (event) => {
+        const level = event.payload as number
+        barHeights.value = Array.from({ length: 5 }, () =>
+          Math.max(4, Math.min(24, 4 + level * 40 + Math.random() * 8))
+        )
       })
     } catch {
       // browser fallback
     }
   })
 
-onUnmounted(() => {
-  unlisten?.()
-})
+  onUnmounted(() => {
+    unlisten?.()
+    unlistenLevel?.()
+  })
 </script>
 
 <style>
@@ -263,16 +277,11 @@ body {
   height: 8px;
   background: #C8B496;
   border-radius: 2px;
-  transition: height 0.3s;
+  transition: height 0.08s ease-out;
 }
 
 .recording .bar {
-  animation: wave 0.8s ease-in-out infinite alternate;
-}
-
-@keyframes wave {
-  from { height: 4px; opacity: 0.4; }
-  to { height: 20px; opacity: 1; }
+  background: #EF4444;
 }
 
 .status-light {

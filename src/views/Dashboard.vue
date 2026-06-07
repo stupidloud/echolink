@@ -60,6 +60,8 @@ let audioContext = null
 let scriptProcessor = null
 let sourceNode = null
 let gainNode = null
+let analyserNode = null
+let levelRafId = null
 const pcmChunks = []
 
 const unlistens = []
@@ -106,6 +108,34 @@ onUnmounted(() => {
   for (const un of unlistens) { un() }
 })
 
+function startLevelMonitor(ctx, source) {
+  analyserNode = ctx.createAnalyser()
+  analyserNode.fftSize = 256
+  source.connect(analyserNode)
+  const dataArray = new Uint8Array(analyserNode.frequencyBinCount)
+  const { emit: tauriEmit } = window.__TAURI__?.event || {}
+  function tick() {
+    analyserNode.getByteFrequencyData(dataArray)
+    let sum = 0
+    for (let i = 0; i < dataArray.length; i++) sum += dataArray[i]
+    const avg = sum / dataArray.length / 255
+    if (tauriEmit) tauriEmit('audio-level', avg)
+    levelRafId = requestAnimationFrame(tick)
+  }
+  tick()
+}
+
+function stopLevelMonitor() {
+  if (levelRafId != null) {
+    cancelAnimationFrame(levelRafId)
+    levelRafId = null
+  }
+  if (analyserNode) {
+    try { analyserNode.disconnect() } catch {}
+    analyserNode = null
+  }
+}
+
 async function startRecording() {
   try {
     const settings = await invoke('get_settings')
@@ -129,10 +159,14 @@ async function startWebmRecording(stream) {
   mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' })
   mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data) }
   mediaRecorder.onstop = async () => {
+    stopLevelMonitor()
     stream.getTracks().forEach(t => t.stop())
     await handleTranscribeWebM()
   }
   mediaRecorder.start(200)
+  const ctx = new AudioContext({ sampleRate: 16000 })
+  const src = ctx.createMediaStreamSource(stream)
+  startLevelMonitor(ctx, src)
   recordingDuration.value = 0
   recordingTimer.value = setInterval(() => { recordingDuration.value += 0.1 }, 100)
 }
@@ -153,6 +187,7 @@ async function startPcmRecording(stream) {
   sourceNode.connect(scriptProcessor)
   scriptProcessor.connect(gainNode)
   gainNode.connect(audioContext.destination)
+  startLevelMonitor(audioContext, sourceNode)
   recordingDuration.value = 0
   recordingTimer.value = setInterval(() => { recordingDuration.value += 0.1 }, 100)
 }
@@ -183,6 +218,7 @@ async function stopRecording() {
     clearInterval(recordingTimer.value)
     recordingTimer.value = null
   }
+  stopLevelMonitor()
   const settings = await invoke('get_settings')
   const protocol = settings.protocol || 'openai'
 

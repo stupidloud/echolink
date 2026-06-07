@@ -30,6 +30,35 @@ fn api_url(base: &str, path: &str) -> String {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::api_url;
+
+    #[test]
+    fn api_url_keeps_no_v1_base() {
+        let url = api_url("https://api.openai.com", "/v1/models");
+        assert_eq!(url, "https://api.openai.com/v1/models");
+    }
+
+    #[test]
+    fn api_url_strips_duplicate_v1() {
+        let url = api_url("https://api.stepfun.com/v1", "/v1/audio/asr/sse");
+        assert_eq!(url, "https://api.stepfun.com/v1/audio/asr/sse");
+    }
+
+    #[test]
+    fn api_url_handles_trailing_slash() {
+        let url = api_url("https://api.openai.com/v1/", "/v1/models");
+        assert_eq!(url, "https://api.openai.com/v1/models");
+    }
+
+    #[test]
+    fn api_url_handles_no_path_slash() {
+        let url = api_url("https://example.com", "v1/models");
+        assert_eq!(url, "https://example.com/v1/models");
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[allow(unused_variables)]
@@ -44,7 +73,7 @@ pub fn run() {
         .setup(|app| {
             use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
-            let ralt = Shortcut::new(Some(Modifiers::ALT), Code::AltRight);
+            let ralt = Shortcut::new(None, Code::AltRight);
 
             app.handle().plugin(
                 tauri_plugin_global_shortcut::Builder::new()
