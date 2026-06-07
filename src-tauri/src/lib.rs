@@ -118,6 +118,7 @@ pub fn run() {
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct AppSettings {
     pub base_url: String,
     pub api_key: String,
