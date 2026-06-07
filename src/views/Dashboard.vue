@@ -42,7 +42,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 
@@ -55,12 +55,14 @@ let mediaRecorder = null
 let audioChunks = []
 let currentStream = null
 const isTranscribing = ref(false)
-const currentSettings = ref(null)
 
 let audioContext = null
 let scriptProcessor = null
 let sourceNode = null
+let gainNode = null
 const pcmChunks = []
+
+const unlistens = []
 
 const totalChars = computed(() => historyTexts.value.reduce((sum, t) => sum + t.length, 0))
 const totalMinutes = computed(() => Math.max(1, Math.round(totalChars.value / 200)))
@@ -68,42 +70,49 @@ const avgSpeed = computed(() => totalMinutes.value > 0 ? Math.round(totalChars.v
 
 onMounted(async () => {
   try {
-    currentSettings.value = await invoke('get_settings')
+    historyTexts.value = (await invoke('get_history', { limit: 99999 })).map(r => r.text)
 
-    await listen<boolean>('recording-state', async (event) => {
+    unlistens.push(await listen<boolean>('recording-state', async (event) => {
       isRecording.value = event.payload
       if (event.payload) {
         await startRecording()
       } else {
         await stopRecording()
       }
-    })
+    }))
 
-    await listen('transcript-delta', (e) => {
+    unlistens.push(await listen('transcript-delta', (e) => {
       if (isTranscribing.value) {
         transcript.value += e.payload
       }
-    })
+    }))
 
-    await listen('transcript-done', async (e) => {
+    unlistens.push(await listen('transcript-done', async (e) => {
       if (!isTranscribing.value) return
       const text = e.payload
+      const settings = await invoke('get_settings')
       transcript.value = text
-      await invoke('insert_history', { text, protocol: currentSettings.value?.protocol || 'openai', target_app: '当前应用' })
+      historyTexts.value.push(text)
+      await invoke('insert_history', { text, protocol: settings.protocol || 'openai', target_app: '当前应用' })
       await invoke('inject_text', { text })
       isTranscribing.value = false
-    })
+    }))
   } catch {
     // browser fallback
   }
 })
 
+onUnmounted(() => {
+  for (const un of unlistens) { un() }
+})
+
 async function startRecording() {
   try {
+    const settings = await invoke('get_settings')
     currentStream = await navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true }
     })
-    const protocol = currentSettings.value?.protocol || 'openai'
+    const protocol = settings.protocol || 'openai'
     if (protocol === 'stepfun') {
       await startPcmRecording(currentStream)
     } else {
@@ -133,12 +142,17 @@ async function startPcmRecording(stream) {
   audioContext = new AudioContext({ sampleRate: 16000 })
   sourceNode = audioContext.createMediaStreamSource(stream)
   scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1)
+  gainNode = audioContext.createGain()
+  gainNode.gain.value = 0
+
   scriptProcessor.onaudioprocess = (e) => {
     const input = e.inputBuffer.getChannelData(0)
     const pcm = floatTo16BitPCM(input)
     pcmChunks.push(pcm)
   }
   sourceNode.connect(scriptProcessor)
+  scriptProcessor.connect(gainNode)
+  gainNode.connect(audioContext.destination)
   recordingDuration.value = 0
   recordingTimer.value = setInterval(() => { recordingDuration.value += 0.1 }, 100)
 }
@@ -169,9 +183,14 @@ async function stopRecording() {
     clearInterval(recordingTimer.value)
     recordingTimer.value = null
   }
-  const protocol = currentSettings.value?.protocol || 'openai'
+  const settings = await invoke('get_settings')
+  const protocol = settings.protocol || 'openai'
 
   if (protocol === 'stepfun') {
+    if (gainNode) {
+      try { gainNode.disconnect() } catch {}
+      gainNode = null
+    }
     if (scriptProcessor) {
       try { scriptProcessor.disconnect() } catch {}
       scriptProcessor = null
