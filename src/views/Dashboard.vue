@@ -37,7 +37,9 @@
     <div class="transcript-box">
       <label class="transcript-label">最近一次转录结果</label>
       <p class="transcript-text">{{ transcript || '等待语音输入...' }}</p>
-      <div v-if="isRecording" class="recording-indicator">🔴 录音中</div>
+      <div v-if="isRecording" class="recording-indicator">
+        <span class="rec-dot"></span>录音中 {{ recordingDuration.toFixed(1) }}s
+      </div>
     </div>
   </div>
 </template>
@@ -50,38 +52,79 @@ import { listen } from '@tauri-apps/api/event'
 const isRecording = ref(false)
 const transcript = ref('')
 const historyTexts = ref([])
+const recordingDuration = ref(0)
+const recordingTimer = ref(null)
+let mediaRecorder = null
+let audioChunks = []
 
 const totalChars = computed(() => historyTexts.value.reduce((sum, t) => sum + t.length, 0))
 const totalMinutes = computed(() => Math.max(1, Math.round(totalChars.value / 200)))
 const avgSpeed = computed(() => totalMinutes.value > 0 ? Math.round(totalChars.value / totalMinutes.value) : 0)
 
-  let unlisten = null
-
 onMounted(async () => {
   try {
-    unlisten = await listen<boolean>('recording-state', async (event) => {
+    const unlisten = await listen<boolean>('recording-state', async (event) => {
       isRecording.value = event.payload
-      if (!event.payload) {
-        // Released — trigger transcribe + inject
-        await handleTranscribe()
+      if (event.payload) {
+        await startRecording()
+      } else {
+        await stopRecording()
       }
     })
+    unlisten.then(fn => { if (fn) fn() })
   } catch {
     // browser fallback
   }
 })
 
-onUnmounted(() => {
-  unlisten?.()
-})
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        sampleRate: 16000,
+        echoCancellation: true,
+        noiseSuppression: true,
+      }
+    })
+    audioChunks = []
+    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) audioChunks.push(e.data)
+    }
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop())
+      await handleTranscribe()
+    }
+    mediaRecorder.start(200)
+    recordingDuration.value = 0
+    recordingTimer.value = setInterval(() => {
+      recordingDuration.value += 0.1
+    }, 100)
+  } catch (e) {
+    console.error('Microphone access denied:', e)
+    transcript.value = '⚠️ 无法访问麦克风，请检查权限设置'
+  }
+}
+
+async function stopRecording() {
+  if (recordingTimer.value) {
+    clearInterval(recordingTimer.value)
+    recordingTimer.value = null
+  }
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop()
+  }
+}
 
 async function handleTranscribe() {
   try {
+    if (audioChunks.length === 0) return
+    const blob = new Blob(audioChunks, { type: 'audio/webm' })
+    const base64 = await fileToBase64(blob)
     const settings = await invoke('get_settings')
-    // In real implementation, audio_b64 comes from Rust recording buffer
-    // For now, placeholder
     const text = await invoke('transcribe_audio', {
-      audioB64: '',
+      audioB64: base64,
       settings,
     })
     transcript.value = text
@@ -93,7 +136,21 @@ async function handleTranscribe() {
     await invoke('inject_text', { text })
   } catch (e) {
     console.warn('transcribe failed:', e)
+  } finally {
+    audioChunks = []
   }
+}
+
+function fileToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => {
+    const base64 = reader.result.toString().split(',')[1]
+    resolve(base64)
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
 }
 </script>
 
@@ -109,11 +166,27 @@ async function handleTranscribe() {
   font-size: 13px;
   color: #DC2626;
   font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   animation: blink 1s ease-in-out infinite;
+}
+
+.rec-dot {
+  width: 10px;
+  height: 10px;
+  background: #DC2626;
+  border-radius: 50%;
+  animation: pulse 0.8s ease-in-out infinite;
 }
 
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.6; }
 }
 </style>
