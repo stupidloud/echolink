@@ -45,7 +45,7 @@
         <label class="form-label">模型名称 (Model)</label>
         <div class="input-wrapper select-wrapper">
           <select v-model="form.model" class="form-select">
-            <option v-for="m in modelOptions" :key="m" :value="m">{{ m }}</option>
+            <option v-for="m in currentModels" :key="m" :value="m">{{ m }}</option>
           </select>
           <ChevronDown class="select-icon" />
         </div>

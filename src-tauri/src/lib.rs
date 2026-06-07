@@ -356,36 +356,40 @@ async fn transcribe_audio_sse(audio_b64: String, settings: AppSettings, app: tau
             if line.is_empty() {
                 continue;
             }
-            if !line.starts_with("data:") {
+            if let Some(data) = line.strip_prefix("data:") {
+                let data = data.trim();
+                if data.is_empty() || data == "[DONE]" {
+                    continue;
+                }
+                match serde_json::from_str::<StepFunSseEvent>(data) {
+                    Ok(evt) => match evt.event_type.as_str() {
+                        "transcript.text.delta" => {
+                            if let Some(ref d) = evt.delta {
+                                full_text.push_str(d);
+                                let _ = app.emit("transcript-delta", d.clone());
+                            }
+                        }
+                        "transcript.text.done" => {
+                            if let Some(ref t) = evt.text {
+                                full_text = t.clone();
+                            }
+                            let _ = app.emit("transcript-done", full_text.clone());
+                        }
+                        "error" => {
+                            let err_msg = evt.message.clone().unwrap_or_default();
+                            let _ = app.emit("transcript-error", err_msg.clone());
+                            return Err(format!("ASR SSE error: {}", err_msg));
+                        }
+                        _ => {}
+                    },
+                    Err(_) => {
+                        remainder.push_str(raw_line);
+                        remainder.push('\n');
+                    }
+                }
+            } else {
                 remainder.push_str(raw_line);
                 remainder.push('\n');
-                continue;
-            }
-            let data = line.strip_prefix("data:").map(|s| s.trim()).unwrap_or("");
-            if data.is_empty() || data == "[DONE]" {
-                continue;
-            }
-            if let Ok(evt) = serde_json::from_str::<StepFunSseEvent>(data) {
-                match evt.event_type.as_str() {
-                    "transcript.text.delta" => {
-                        if let Some(ref d) = evt.delta {
-                            full_text.push_str(d);
-                            let _ = app.emit("transcript-delta", d.clone());
-                        }
-                    }
-                    "transcript.text.done" => {
-                        if let Some(ref t) = evt.text {
-                            full_text = t.clone();
-                        }
-                        let _ = app.emit("transcript-done", full_text.clone());
-                    }
-                    "error" => {
-                        let err_msg = evt.message.clone().unwrap_or_default();
-                        let _ = app.emit("transcript-error", err_msg.clone());
-                        return Err(format!("ASR SSE error: {}", err_msg));
-                    }
-                    _ => {}
-                }
             }
         }
         buf = remainder;
@@ -443,60 +447,42 @@ fn get_app_version() -> String {
 #[tauri::command]
 async fn verify_connection(settings: AppSettings) -> Result<String, String> {
     let client = reqwest::Client::new();
-    match settings.protocol.as_str() {
-        "stepfun" => {
-            let url = format!("{}/v1/audio/asr/sse", settings.base_url.trim_end_matches('/'));
-            let body = serde_json::json!({
-                "audio": {
-                    "data": "",
-                    "input": {
-                        "transcription": {
-                            "model": settings.model,
-                            "language": "zh",
-                            "enable_itn": true,
-                            "enable_timestamp": false
-                        },
-                        "format": {
-                            "type": "pcm",
-                            "codec": "pcm_s16le",
-                            "rate": 16000,
-                            "bits": 16,
-                            "channel": 1
-                        }
-                    }
-                }
-            });
-            let resp = client
-                .post(&url)
-                .header("Authorization", format!("Bearer {}", settings.api_key))
-                .header("Content-Type", "application/json")
-                .header("Accept", "text/event-stream")
-                .json(&body)
-                .send()
-                .await
-                .map_err(|e| e.to_string())?;
+    let url = format!("{}/v1/models", settings.base_url.trim_end_matches('/'));
 
-            match resp.status().as_u16() {
-                401 | 403 => Err("❌ API Key 无效或已过期".to_string()),
-                200..=299 => Ok("✅ 连接成功，端点与 Key 有效".to_string()),
-                _ => Err(format!("❌ 服务端返回错误: {}", resp.status())),
+    let resp = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", settings.api_key))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    match resp.status().as_u16() {
+        401 | 403 => Err("❌ API Key 无效或已过期".to_string()),
+        200..=299 => {
+            let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+            let models = body["data"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|m| m["id"].as_str())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+
+            if models.contains(&settings.model.as_str()) {
+                Ok(format!(
+                    "✅ 连接成功，模型 {} 可用",
+                    settings.model
+                ))
+            } else {
+                let available = models.join(", ");
+                Err(format!(
+                    "⚠️ 端点与 Key 有效，但模型 '{}' 不在可用列表中：{}",
+                    settings.model, available
+                ))
             }
         }
-        _ => {
-            let url = format!("{}/v1/models", settings.base_url.trim_end_matches('/'));
-            let resp = client
-                .get(&url)
-                .header("Authorization", format!("Bearer {}", settings.api_key))
-                .send()
-                .await
-                .map_err(|e| e.to_string())?;
-
-            match resp.status().as_u16() {
-                401 | 403 => Err("❌ API Key 无效或已过期".to_string()),
-                200..=299 => Ok("✅ 连接成功，端点与 Key 有效".to_string()),
-                 _ => Err(format!("❌ 服务端返回错误: {}", resp.status())),
-            }
-        }
+        _ => Err(format!("❌ 服务端返回错误: {}", resp.status())),
     }
 }
 
