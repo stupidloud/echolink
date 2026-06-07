@@ -25,7 +25,6 @@
     "store:allow-clear",
     "sql:allow-execute",
     "sql:allow-select",
-    "sql:allow-batch",
     "sql:allow-close",
     "shell:allow-open",
     "shell:allow-show",
