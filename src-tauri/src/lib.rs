@@ -6,7 +6,7 @@ use tauri::{
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_store::StoreExt;
-use enigo::{Enigo, Keyboard, Settings};
+use enigo::{Enigo, Keyboard};
 
 #[derive(Default)]
 struct AppState {
@@ -99,14 +99,14 @@ pub fn run() {
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
-struct Settings {
+struct AppSettings {
     pub base_url: String,
     pub api_key: String,
     pub model: String,
     pub protocol: String,
 }
 
-impl Default for Settings {
+impl Default for AppSettings {
     fn default() -> Self {
         Self {
             base_url: "https://api.openai.com".to_string(),
@@ -118,11 +118,11 @@ impl Default for Settings {
 }
 
 #[tauri::command]
-async fn get_settings(app: tauri::AppHandle) -> Result<Settings, String> {
+async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> {
     let store = app.store("settings.json").map_err(|e| e.to_string())?;
     let key = "settings";
-    let default = Settings::default();
-    let s: Settings = store
+    let default = AppSettings::default();
+    let s: AppSettings = store
         .get(key)
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or(default);
@@ -130,7 +130,7 @@ async fn get_settings(app: tauri::AppHandle) -> Result<Settings, String> {
 }
 
 #[tauri::command]
-async fn save_settings(app: tauri::AppHandle, settings: Settings) -> Result<(), String> {
+async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Result<(), String> {
     let store = app.store("settings.json").map_err(|e| e.to_string())?;
     store
         .set("settings", serde_json::to_value(settings).map_err(|e| e.to_string())?)
@@ -212,7 +212,7 @@ async fn delete_history(_app: tauri::AppHandle, id: String) -> Result<(), String
 }
 
 #[tauri::command]
-async fn transcribe_audio(audio_b64: String, settings: Settings) -> Result<String, String> {
+async fn transcribe_audio(audio_b64: String, settings: AppSettings) -> Result<String, String> {
     let client = reqwest::Client::new();
     let url = format!("{}/v1/audio/transcriptions", settings.base_url.trim_end_matches('/'));
     let audio_bytes = base64::decode(&audio_b64).map_err(|e| e.to_string())?;
@@ -239,8 +239,7 @@ async fn transcribe_audio(audio_b64: String, settings: Settings) -> Result<Strin
 
 #[tauri::command]
 async fn inject_text(text: String) -> Result<(), String> {
-    let settings = Settings::default();
-    let mut enigo = Enigo::new(&settings).map_err(|e| e.to_string())?;
+    let mut enigo = Enigo::new(&enigo::Settings::default()).map_err(|e| e.to_string())?;
     enigo.text(&text).map_err(|e| e.to_string())?;
     Ok(())
 }
