@@ -5,6 +5,7 @@ use tauri::{
     Emitter,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_store::StoreExt;
 
 #[derive(Default)]
 struct AppState {
@@ -66,13 +67,13 @@ pub fn run() {
                 .menu(&menu)
                 .on_menu_event(move |app, event| match event.id().as_ref() {
                     "show" => {
-                        if let Some(w) = app.get_webview_window("main") {
+                        if let Some(w) = app.get_webview("main") {
                             let _ = w.show();
                             let _ = w.set_focus();
                         }
                     }
                     "hide" => {
-                        if let Some(w) = app.get_webview_window("main") {
+                        if let Some(w) = app.get_webview("main") {
                             let _ = w.hide();
                         }
                     }
@@ -89,7 +90,7 @@ pub fn run() {
                     } = event
                     {
                         let app = tray.app_handle();
-                        if let Some(w) = app.get_webview_window("main") {
+                        if let Some(w) = app.get_webview("main") {
                             let _ = w.show();
                             let _ = w.set_focus();
                         }
@@ -108,6 +109,7 @@ pub fn run() {
             delete_history,
             transcribe_audio,
             transcribe_audio_sse,
+            verify_connection,
             inject_text,
             get_app_version,
         ])
@@ -136,6 +138,7 @@ impl Default for AppSettings {
 
 #[tauri::command]
 async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> {
+    use tauri_plugin_store::StoreExt;
     let store = app.store("settings.json").map_err(|e| e.to_string())?;
     let key = "settings";
     let default = AppSettings::default();
@@ -148,6 +151,7 @@ async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> {
 
 #[tauri::command]
 async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Result<(), String> {
+    use tauri_plugin_store::StoreExt;
     let store = app.store("settings.json").map_err(|e| e.to_string())?;
     let value = serde_json::to_value(settings).map_err(|e| e.to_string())?;
     store.set("settings", value);
@@ -345,41 +349,46 @@ async fn transcribe_audio_sse(audio_b64: String, settings: AppSettings, app: tau
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| e.to_string())?;
         buf.push_str(String::from_utf8_lossy(&chunk).as_ref());
-        let mut lines = buf.lines();
-        buf = lines.next_back().unwrap_or("").to_string();
-        for line in lines {
-            let line = line.trim();
-            if line.starts_with("data:") {
-                let data = line.strip_prefix("data:").unwrap_or(line).trim();
-                if data.is_empty() || data == "[DONE]" {
-                    continue;
-                }
-                match serde_json::from_str::<StepFunSseEvent>(data) {
-                    Ok(evt) => {
-                        match evt.event_type.as_str() {
-                            "transcript.text.delta" => {
-                                if let Some(d) = evt.delta {
-                                    full_text.push_str(&d);
-                                    let _ = app.emit("transcript-delta", d);
-                                }
-                            }
-                            "transcript.text.done" => {
-                                if let Some(t) = evt.text {
-                                    full_text = t.clone();
-                                }
-                                let _ = app.emit("transcript-done", full_text.clone());
-                            }
-                            "error" => {
-                                let _ = app.emit("transcript-error", evt.message.unwrap_or_default());
-                                return Err(format!("ASR SSE error: {}", evt.message.unwrap_or_default()));
-                            }
-                            _ => {}
+
+        let mut remainder = String::new();
+        for raw_line in buf.split('\n') {
+            let line = raw_line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            if !line.starts_with("data:") {
+                remainder.push_str(raw_line);
+                remainder.push('\n');
+                continue;
+            }
+            let data = line.strip_prefix("data:").map(|s| s.trim()).unwrap_or("");
+            if data.is_empty() || data == "[DONE]" {
+                continue;
+            }
+            if let Ok(evt) = serde_json::from_str::<StepFunSseEvent>(data) {
+                match evt.event_type.as_str() {
+                    "transcript.text.delta" => {
+                        if let Some(ref d) = evt.delta {
+                            full_text.push_str(d);
+                            let _ = app.emit("transcript-delta", d.clone());
                         }
                     }
-                    Err(_) => {}
+                    "transcript.text.done" => {
+                        if let Some(ref t) = evt.text {
+                            full_text = t.clone();
+                        }
+                        let _ = app.emit("transcript-done", full_text.clone());
+                    }
+                    "error" => {
+                        let err_msg = evt.message.clone().unwrap_or_default();
+                        let _ = app.emit("transcript-error", err_msg.clone());
+                        return Err(format!("ASR SSE error: {}", err_msg));
+                    }
+                    _ => {}
                 }
             }
         }
+        buf = remainder;
     }
 
     for line in buf.lines() {
@@ -409,10 +418,86 @@ async fn transcribe_audio_sse(audio_b64: String, settings: AppSettings, app: tau
 async fn inject_text(app: tauri::AppHandle, text: String) -> Result<(), String> {
     use tauri_plugin_clipboard_manager::ClipboardExt;
     app.clipboard().write_text(&text).map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "macos")]
+    {
+        let _ = app.shell().command("osascript")
+            .args(["-e", "tell application \"System Events\" to keystroke \"v\" using command down"])
+            .spawn();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let _ = app.shell().command("powershell")
+            .args(["-Command", "(New-Object -ComObject WScript.Shell).SendKeys('^v')"])
+            .spawn();
+    }
+
     Ok(())
 }
 
 #[tauri::command]
 fn get_app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[tauri::command]
+async fn verify_connection(settings: AppSettings) -> Result<String, String> {
+    let client = reqwest::Client::new();
+    match settings.protocol.as_str() {
+        "stepfun" => {
+            let url = format!("{}/v1/audio/asr/sse", settings.base_url.trim_end_matches('/'));
+            let body = serde_json::json!({
+                "audio": {
+                    "data": "",
+                    "input": {
+                        "transcription": {
+                            "model": settings.model,
+                            "language": "zh",
+                            "enable_itn": true,
+                            "enable_timestamp": false
+                        },
+                        "format": {
+                            "type": "pcm",
+                            "codec": "pcm_s16le",
+                            "rate": 16000,
+                            "bits": 16,
+                            "channel": 1
+                        }
+                    }
+                }
+            });
+            let resp = client
+                .post(&url)
+                .header("Authorization", format!("Bearer {}", settings.api_key))
+                .header("Content-Type", "application/json")
+                .header("Accept", "text/event-stream")
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| e.to_string())?;
+
+            match resp.status().as_u16() {
+                401 | 403 => Err("❌ API Key 无效或已过期".to_string()),
+                200..=299 => Ok("✅ 连接成功，端点与 Key 有效".to_string()),
+                _ => Err(format!("❌ 服务端返回错误: {}", resp.status())),
+            }
+        }
+        _ => {
+            let url = format!("{}/v1/models", settings.base_url.trim_end_matches('/'));
+            let resp = client
+                .get(&url)
+                .header("Authorization", format!("Bearer {}", settings.api_key))
+                .send()
+                .await
+                .map_err(|e| e.to_string())?;
+
+            match resp.status().as_u16() {
+                401 | 403 => Err("❌ API Key 无效或已过期".to_string()),
+                200..=299 => Ok("✅ 连接成功，端点与 Key 有效".to_string()),
+                _ => Err(format!("❌ 服务端返回错误: {}", resp.status())),
+            }
+        }
+    }
+}
     env!("CARGO_PKG_VERSION").to_string()
 }

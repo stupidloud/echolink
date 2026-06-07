@@ -139,7 +139,6 @@ async function startPcmRecording(stream) {
     pcmChunks.push(pcm)
   }
   sourceNode.connect(scriptProcessor)
-  scriptProcessor.connect(audioContext.destination)
   recordingDuration.value = 0
   recordingTimer.value = setInterval(() => { recordingDuration.value += 0.1 }, 100)
 }
