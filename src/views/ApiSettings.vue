@@ -64,10 +64,10 @@ const msg = ref('')
 const msgType = ref('')
 
 const defaultForm = {
-  baseUrl: 'https://api.openai.com',
+  baseUrl: 'https://api.stepfun.com',
   apiKey: '',
-  model: 'gpt-4o-mini-transcribe',
-  protocol: 'openai',
+  model: 'stepaudio-2.5-asr',
+  protocol: 'stepfun',
 }
 
 const form = ref({ ...defaultForm })

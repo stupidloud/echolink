@@ -42,10 +42,10 @@ pub fn run() {
                         if shortcut == &ralt {
                             match event.state() {
                                 ShortcutState::Pressed => {
-                                    let _ = _app.emit("recording-state", "started");
+                                    let _ = _app.emit("recording-state", true);
                                 }
                                 ShortcutState::Released => {
-                                    let _ = _app.emit("recording-state", "stopped");
+                                    let _ = _app.emit("recording-state", false);
                                 }
                             }
                         }
@@ -107,6 +107,7 @@ pub fn run() {
             insert_history,
             delete_history,
             transcribe_audio,
+            transcribe_audio_sse,
             inject_text,
             get_app_version,
         ])
@@ -125,10 +126,10 @@ struct AppSettings {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            base_url: "https://api.openai.com".to_string(),
+            base_url: "https://api.stepfun.com".to_string(),
             api_key: String::new(),
-            model: "gpt-4o-mini-transcribe".to_string(),
-            protocol: "openai".to_string(),
+            model: "stepaudio-2.5-asr".to_string(),
+            protocol: "stepfun".to_string(),
         }
     }
 }
@@ -250,6 +251,158 @@ async fn transcribe_audio(audio_b64: String, settings: AppSettings) -> Result<St
     }
     let text: String = resp.text().await.map_err(|e| e.to_string())?;
     Ok(text)
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct StepFunAsrRequest {
+    audio: StepFunAudio,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct StepFunAudio {
+    data: String,
+    input: StepFunInput,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct StepFunInput {
+    transcription: StepFunTranscription,
+    format: StepFunFormat,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct StepFunTranscription {
+    model: String,
+    language: String,
+    enable_itn: bool,
+    enable_timestamp: bool,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct StepFunFormat {
+    #[serde(rename = "type")]
+    kind: String,
+    codec: String,
+    rate: u32,
+    bits: u32,
+    channel: u32,
+}
+
+#[derive(serde::Deserialize)]
+struct StepFunSseEvent {
+    #[serde(rename = "type")]
+    event_type: String,
+    delta: Option<String>,
+    text: Option<String>,
+    message: Option<String>,
+}
+
+#[tauri::command]
+async fn transcribe_audio_sse(audio_b64: String, settings: AppSettings, app: tauri::AppHandle) -> Result<String, String> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/v1/audio/asr/sse", settings.base_url.trim_end_matches('/'));
+
+    let body = StepFunAsrRequest {
+        audio: StepFunAudio {
+            data: audio_b64,
+            input: StepFunInput {
+                transcription: StepFunTranscription {
+                    model: settings.model.clone(),
+                    language: "zh".to_string(),
+                    enable_itn: true,
+                    enable_timestamp: false,
+                },
+                format: StepFunFormat {
+                    kind: "pcm".to_string(),
+                    codec: "pcm_s16le".to_string(),
+                    rate: 16000,
+                    bits: 16,
+                    channel: 1,
+                },
+            },
+        },
+    };
+
+    let resp = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", settings.api_key))
+        .header("Content-Type", "application/json")
+        .header("Accept", "text/event-stream")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        return Err(format!("ASR SSE error: {}", resp.status()));
+    }
+
+    let mut full_text = String::new();
+    let mut stream = resp.bytes_stream();
+    let mut buf = String::new();
+
+    use futures_util::StreamExt;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| e.to_string())?;
+        buf.push_str(String::from_utf8_lossy(&chunk).as_ref());
+        let mut lines = buf.lines();
+        buf = lines.next_back().unwrap_or("").to_string();
+        for line in lines {
+            let line = line.trim();
+            if line.starts_with("data:") {
+                let data = line.strip_prefix("data:").unwrap_or(line).trim();
+                if data.is_empty() || data == "[DONE]" {
+                    continue;
+                }
+                match serde_json::from_str::<StepFunSseEvent>(data) {
+                    Ok(evt) => {
+                        match evt.event_type.as_str() {
+                            "transcript.text.delta" => {
+                                if let Some(d) = evt.delta {
+                                    full_text.push_str(&d);
+                                    let _ = app.emit("transcript-delta", d);
+                                }
+                            }
+                            "transcript.text.done" => {
+                                if let Some(t) = evt.text {
+                                    full_text = t.clone();
+                                }
+                                let _ = app.emit("transcript-done", full_text.clone());
+                            }
+                            "error" => {
+                                let _ = app.emit("transcript-error", evt.message.unwrap_or_default());
+                                return Err(format!("ASR SSE error: {}", evt.message.unwrap_or_default()));
+                            }
+                            _ => {}
+                        }
+                    }
+                    Err(_) => {}
+                }
+            }
+        }
+    }
+
+    for line in buf.lines() {
+        let line = line.trim();
+        if line.starts_with("data:") {
+            let data = line.strip_prefix("data:").unwrap_or(line).trim();
+            if !data.is_empty() && data != "[DONE]" {
+                if let Ok(evt) = serde_json::from_str::<StepFunSseEvent>(data) {
+                    match evt.event_type.as_str() {
+                        "transcript.text.delta" => {
+                            if let Some(d) = evt.delta { full_text.push_str(&d); }
+                        }
+                        "transcript.text.done" => {
+                            if let Some(t) = evt.text { full_text = t; }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(full_text)
 }
 
 #[tauri::command]
