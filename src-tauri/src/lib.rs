@@ -494,10 +494,13 @@ async fn verify_connection(settings: AppSettings) -> Result<String, String> {
             match resp.status().as_u16() {
                 401 | 403 => Err("❌ API Key 无效或已过期".to_string()),
                 200..=299 => Ok("✅ 连接成功，端点与 Key 有效".to_string()),
-                _ => Err(format!("❌ 服务端返回错误: {}", resp.status())),
+                 _ => Err(format!("❌ 服务端返回错误: {}", resp.status())),
             }
         }
     }
 }
+
+#[tauri::command]
+fn get_app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
