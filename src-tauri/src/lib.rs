@@ -132,9 +132,8 @@ async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> {
 #[tauri::command]
 async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Result<(), String> {
     let store = app.store("settings.json").map_err(|e| e.to_string())?;
-    store
-        .set("settings", serde_json::to_value(settings).map_err(|e| e.to_string())?)
-        .map_err(|e| e.to_string())?;
+    let value = serde_json::to_value(settings).map_err(|e| e.to_string())?;
+    store.set("settings", value);
     store.save();
     Ok(())
 }
