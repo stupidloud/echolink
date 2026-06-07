@@ -237,9 +237,20 @@ async fn transcribe_audio(audio_b64: String, settings: AppSettings) -> Result<St
 }
 
 #[tauri::command]
-async fn inject_text(text: String) -> Result<(), String> {
+async fn inject_text(app: tauri::AppHandle, text: String) -> Result<(), String> {
+    use tauri_plugin_clipboard_manager::ClipboardExt;
+    use enigo::Key;
+    app.clipboard().write_text(&text).map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "macos")]
+    let (mod_key, key) = (Key::Meta, Key::V);
+    #[cfg(not(target_os = "macos"))]
+    let (mod_key, key) = (Key::Control, Key::V);
+
     let mut enigo = Enigo::new(&enigo::Settings::default()).map_err(|e| e.to_string())?;
-    enigo.text(&text).map_err(|e| e.to_string())?;
+    enigo.key_down(mod_key).map_err(|e| e.to_string())?;
+    enigo.key_click(key).map_err(|e| e.to_string())?;
+    enigo.key_up(mod_key).map_err(|e| e.to_string())?;
     Ok(())
 }
 
