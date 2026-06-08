@@ -92,17 +92,17 @@ onMounted(async () => {
   }
 
   // Frontend key handler: catches AltGr when Echolink has focus
-  const onKey = (e) => {
+  const onKey = async (e) => {
     if (e.code === 'AltRight' || e.key === 'AltGraph') {
       e.preventDefault()
       if (e.type === 'keydown' && !isRecording.value) {
         console.log('[key] AltGr down (focused)')
         isRecording.value = true
-        startRecording()
+        await startRecording()
       } else if (e.type === 'keyup' && isRecording.value) {
         console.log('[key] AltGr up (focused)')
         isRecording.value = false
-        stopRecording()
+        await stopRecording()
       }
     }
   }
