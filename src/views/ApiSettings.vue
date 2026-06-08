@@ -106,11 +106,14 @@ async function test() {
   msg.value = '正在测试连接...'
   msgType.value = ''
   testing.value = true
+  console.log('[api] test connection →', form.value.baseUrl, form.value.model)
   try {
     const result = await invoke('verify_connection', { settings: form.value })
+    console.log('[api] verify_connection OK →', result)
     msg.value = result
     msgType.value = 'success'
   } catch (e) {
+    console.log('[api] verify_connection FAILED →', e)
     msg.value = `❌ ${e}`
     msgType.value = 'error'
   } finally {
@@ -122,11 +125,14 @@ async function save() {
   msg.value = '正在保存...'
   msgType.value = ''
   testing.value = true
+  console.log('[api] save settings →', form.value.protocol, form.value.baseUrl)
   try {
     await invoke('save_settings', { settings: form.value })
+    console.log('[api] save OK')
     msg.value = '✅ 已保存'
     msgType.value = 'success'
   } catch (e) {
+    console.log('[api] save FAILED →', e)
     msg.value = `❌ 保存失败: ${e}`
     msgType.value = 'error'
   } finally {
