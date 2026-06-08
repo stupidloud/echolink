@@ -139,6 +139,7 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         .setup(|app| {
             let handle = app.handle().clone();
+            let _ = handle.emit("rdev-status", "rdev thread starting...");
             std::thread::spawn(move || {
                 if let Err(e) = rdev::listen(move |event| {
                     match event.event_type {
@@ -154,6 +155,7 @@ pub fn run() {
                     }
                 }) {
                     log::error!("rdev listen failed: {:?}", e);
+                    let _ = handle.emit("rdev-status", format!("rdev listen error: {:?}", e));
                 }
             });
 
