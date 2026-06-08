@@ -148,24 +148,24 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
         .setup(|app| {
-            log::info!("Rust backend started → log forwarding test");
+            let _ = app.emit("debug-log", "Rust backend started");
             let handle = app.handle().clone();
             std::thread::spawn(move || {
-                log::info!("rdev listen thread started");
+                let _ = handle.emit("debug-log", "rdev thread started");
                 if let Err(e) = rdev::listen(move |event| {
                     match event.event_type {
                         rdev::EventType::KeyPress(rdev::Key::AltGr) => {
-                            log::info!("AltGr pressed → recording-state: true");
+                            let _ = handle.emit("debug-log", "AltGr pressed");
                             let _ = handle.emit("recording-state", true);
                         }
                         rdev::EventType::KeyRelease(rdev::Key::AltGr) => {
-                            log::info!("AltGr released → recording-state: false");
+                            let _ = handle.emit("debug-log", "AltGr released");
                             let _ = handle.emit("recording-state", false);
                         }
                         _ => {}
                     }
                 }) {
-                    log::error!("rdev listen failed: {:?}", e);
+                    let _ = handle.emit("debug-log", format!("rdev error: {:?}", e));
                 }
             });
 
