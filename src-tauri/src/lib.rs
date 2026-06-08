@@ -152,17 +152,18 @@ pub fn run() {
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 let _ = handle.emit("debug-log", "rdev thread started");
+                let cb_handle = handle.clone();
                 if let Err(e) = rdev::listen(move |event| {
                     match event.event_type {
                         rdev::EventType::KeyPress(rdev::Key::AltGr)
                         | rdev::EventType::KeyPress(rdev::Key::Alt) => {
-                            let _ = handle.emit("debug-log", "Alt pressed");
-                            let _ = handle.emit("recording-state", true);
+                            let _ = cb_handle.emit("debug-log", "Alt pressed");
+                            let _ = cb_handle.emit("recording-state", true);
                         }
                         rdev::EventType::KeyRelease(rdev::Key::AltGr)
                         | rdev::EventType::KeyRelease(rdev::Key::Alt) => {
-                            let _ = handle.emit("debug-log", "Alt released");
-                            let _ = handle.emit("recording-state", false);
+                            let _ = cb_handle.emit("debug-log", "Alt released");
+                            let _ = cb_handle.emit("recording-state", false);
                         }
                         _ => {}
                     }
