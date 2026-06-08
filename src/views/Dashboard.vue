@@ -142,6 +142,17 @@ onMounted(async () => {
   } catch {
     console.warn('[dashboard] listen transcript-done failed')
   }
+
+  // Pre-request mic permission so it doesn't pop mid-recording
+  try {
+    const testStream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true }
+    })
+    testStream.getTracks().forEach(t => t.stop())
+    console.log('[mic] permission pre-granted')
+  } catch (e) {
+    console.warn('[mic] permission denied:', e)
+  }
 })
 
 onUnmounted(() => {
@@ -153,7 +164,6 @@ function startLevelMonitor(ctx, source) {
   analyserNode.fftSize = 256
   source.connect(analyserNode)
   const dataArray = new Uint8Array(analyserNode.frequencyBinCount)
-  const { emit: tauriEmit } = window.__TAURI__?.event || {}
   let frameCount = 0
   function tick() {
     analyserNode.getByteFrequencyData(dataArray)
@@ -162,7 +172,7 @@ function startLevelMonitor(ctx, source) {
     const avg = sum / dataArray.length / 255
     if (frameCount % 50 === 0) console.log('[audio-level]', avg.toFixed(3))
     frameCount++
-    if (tauriEmit) tauriEmit('audio-level', avg)
+    emit('audio-level', avg)
     levelRafId = requestAnimationFrame(tick)
   }
   tick()
