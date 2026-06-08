@@ -148,10 +148,10 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
         .setup(|app| {
-            let _ = app.emit("debug-log", "Rust backend started");
+            log::info!("Rust backend started");
             let handle = app.handle().clone();
             std::thread::spawn(move || {
-                let _ = handle.emit("debug-log", "rdev thread started");
+                log::info!("rdev thread started");
                 let cb_handle = handle.clone();
                 let mut alt_down = false;
                 if let Err(e) = rdev::listen(move |event| {
@@ -159,21 +159,21 @@ pub fn run() {
                         rdev::EventType::KeyPress(rdev::Key::AltGr) => {
                             if !alt_down {
                                 alt_down = true;
-                                let _ = cb_handle.emit("debug-log", "AltGr pressed");
+                                log::info!("AltGr pressed");
                                 let _ = cb_handle.emit("recording-state", true);
                             }
                         }
                         rdev::EventType::KeyRelease(rdev::Key::AltGr) => {
                             if alt_down {
                                 alt_down = false;
-                                let _ = cb_handle.emit("debug-log", "AltGr released");
+                                log::info!("AltGr released");
                                 let _ = cb_handle.emit("recording-state", false);
                             }
                         }
                         _ => {}
                     }
                 }) {
-                    let _ = handle.emit("debug-log", format!("rdev error: {:?}", e));
+                    log::error!("rdev listen error: {:?}", e);
                 }
             });
 

@@ -26,12 +26,6 @@ async function setupPlugins() {
   }
 
   try {
-    await listen('debug-log', (event) => {
-      console.log('[rust]', event.payload)
-    })
-  } catch {}
-
-  try {
     store = await load('settings.json')
   } catch (e) {
     console.warn('[init] store failed:', e)
