@@ -6,6 +6,7 @@ import { load } from '@tauri-apps/plugin-store'
 import { readText, writeText } from '@tauri-apps/plugin-clipboard-manager'
 import Database from '@tauri-apps/plugin-sql'
 import { listen } from '@tauri-apps/api/event'
+import { attachConsole } from '@tauri-apps/plugin-log'
 
 const app = createApp(App)
 app.use(router)
@@ -16,6 +17,12 @@ async function setupPlugins() {
   let store = null
   let clipboard = null
   let db = null
+
+  try {
+    await attachConsole()
+  } catch (e) {
+    console.warn('[init] attachConsole failed:', e)
+  }
 
   try {
     store = await load('settings.json')
