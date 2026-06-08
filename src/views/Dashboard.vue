@@ -132,11 +132,18 @@ onMounted(async () => {
       if (!isTranscribing.value) return
       const text = e.payload
       console.log('[event] transcript-done → final length:', text.length)
-      const settings = await invoke('get_settings')
       transcript.value = text
       historyTexts.value.push(text)
-      await invoke('insert_history', { text, protocol: settings.protocol || 'openai', targetApp: '当前应用' })
-      await invoke('inject_text', { text })
+      try {
+        await invoke('insert_history', { text, protocol: settings.protocol || 'openai', targetApp: '当前应用' })
+      } catch (e) {
+        console.warn('[dashboard] insert_history failed:', e)
+      }
+      try {
+        await invoke('inject_text', { text })
+      } catch (e) {
+        console.warn('[dashboard] inject_text failed:', e)
+      }
       isTranscribing.value = false
     }))
   } catch {

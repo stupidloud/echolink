@@ -518,7 +518,6 @@ async fn transcribe_audio_sse(audio_b64: String, settings: AppSettings, app: tau
                                 full_text = t.clone();
                             }
                             log::info!("transcript.text.done → total={} chars", full_text.len());
-                            let _ = app.emit("transcript-done", full_text.clone());
                         }
                         "error" => {
                             let err_msg = evt.message.clone().unwrap_or_default();
@@ -562,6 +561,9 @@ async fn transcribe_audio_sse(audio_b64: String, settings: AppSettings, app: tau
     }
 
     log::info!("transcribe_audio_sse → final_len={}", full_text.len());
+    if !full_text.is_empty() {
+        let _ = app.emit("transcript-done", full_text.clone());
+    }
     Ok(full_text)
 }
 
