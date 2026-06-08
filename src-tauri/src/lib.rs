@@ -2,9 +2,8 @@ use std::sync::Mutex;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, Emitter,
+    Emitter, Manager,
 };
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_store::StoreExt;
 
 #[derive(Default)]
@@ -137,30 +136,22 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
-            use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
-
-            let ralt = Shortcut::new(None, Code::AltRight);
-
-            app.handle().plugin(
-                tauri_plugin_global_shortcut::Builder::new()
-                    .with_handler(move |_app, shortcut, event| {
-                        if shortcut == &ralt {
-                            match event.state() {
-                                ShortcutState::Pressed => {
-                                    let _ = _app.emit("recording-state", true);
-                                }
-                                ShortcutState::Released => {
-                                    let _ = _app.emit("recording-state", false);
-                                }
-                            }
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                if let Err(e) = rdev::listen(move |event| {
+                    match event.event_type {
+                        rdev::EventType::KeyPress(rdev::Key::AltRight) => {
+                            let _ = handle.emit("recording-state", true);
                         }
-                    })
-                    .build(),
-            )?;
-
-            if let Err(e) = app.global_shortcut().register(ralt) {
-                eprintln!("Failed to register RAlt shortcut: {}", e);
-            }
+                        rdev::EventType::KeyRelease(rdev::Key::AltRight) => {
+                            let _ = handle.emit("recording-state", false);
+                        }
+                        _ => {}
+                    }
+                }) {
+                    eprintln!("rdev listen error: {:?}", e);
+                }
+            });
 
             let show = MenuItemBuilder::with_id("show", "显示 Echolink").build(app).unwrap();
             let hide = MenuItemBuilder::with_id("hide", "隐藏").build(app).unwrap();
