@@ -154,12 +154,14 @@ pub fn run() {
                 let _ = handle.emit("debug-log", "rdev thread started");
                 if let Err(e) = rdev::listen(move |event| {
                     match event.event_type {
-                        rdev::EventType::KeyPress(rdev::Key::AltGr) => {
-                            let _ = handle.emit("debug-log", "AltGr pressed");
+                        rdev::EventType::KeyPress(rdev::Key::AltGr)
+                        | rdev::EventType::KeyPress(rdev::Key::Alt) => {
+                            let _ = handle.emit("debug-log", "Alt pressed");
                             let _ = handle.emit("recording-state", true);
                         }
-                        rdev::EventType::KeyRelease(rdev::Key::AltGr) => {
-                            let _ = handle.emit("debug-log", "AltGr released");
+                        rdev::EventType::KeyRelease(rdev::Key::AltGr)
+                        | rdev::EventType::KeyRelease(rdev::Key::Alt) => {
+                            let _ = handle.emit("debug-log", "Alt released");
                             let _ = handle.emit("recording-state", false);
                         }
                         _ => {}
