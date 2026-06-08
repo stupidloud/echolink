@@ -28,6 +28,7 @@
     "shell:allow-open",
     "shell:allow-spawn",
     "shell:allow-execute",
-    "notification:default"
+    "notification:default",
+    "log:default"
   ]
 }
