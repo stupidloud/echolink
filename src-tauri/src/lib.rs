@@ -130,7 +130,6 @@ pub fn run() {
     let state = Mutex::new(AppState::default());
 
     tauri::Builder::default()
-        .device_event_filter(tauri::DeviceEventFilter::Never)
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Info)
@@ -153,17 +152,22 @@ pub fn run() {
             std::thread::spawn(move || {
                 let _ = handle.emit("debug-log", "rdev thread started");
                 let cb_handle = handle.clone();
+                let mut alt_down = false;
                 if let Err(e) = rdev::listen(move |event| {
                     match event.event_type {
-                        rdev::EventType::KeyPress(rdev::Key::AltGr)
-                        | rdev::EventType::KeyPress(rdev::Key::Alt) => {
-                            let _ = cb_handle.emit("debug-log", "Alt pressed");
-                            let _ = cb_handle.emit("recording-state", true);
+                        rdev::EventType::KeyPress(rdev::Key::AltGr) => {
+                            if !alt_down {
+                                alt_down = true;
+                                let _ = cb_handle.emit("debug-log", "AltGr pressed");
+                                let _ = cb_handle.emit("recording-state", true);
+                            }
                         }
-                        rdev::EventType::KeyRelease(rdev::Key::AltGr)
-                        | rdev::EventType::KeyRelease(rdev::Key::Alt) => {
-                            let _ = cb_handle.emit("debug-log", "Alt released");
-                            let _ = cb_handle.emit("recording-state", false);
+                        rdev::EventType::KeyRelease(rdev::Key::AltGr) => {
+                            if alt_down {
+                                alt_down = false;
+                                let _ = cb_handle.emit("debug-log", "AltGr released");
+                                let _ = cb_handle.emit("recording-state", false);
+                            }
                         }
                         _ => {}
                     }
