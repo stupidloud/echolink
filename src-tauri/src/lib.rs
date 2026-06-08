@@ -160,6 +160,9 @@ pub fn run() {
                             if !alt_down {
                                 alt_down = true;
                                 log::info!("AltGr pressed");
+                                // Close any menu bar Alt may have activated
+                                rdev::simulate(&rdev::EventType::KeyPress(rdev::Key::Escape)).ok();
+                                rdev::simulate(&rdev::EventType::KeyRelease(rdev::Key::Escape)).ok();
                                 let _ = cb_handle.emit("recording-state", true);
                             }
                         }
@@ -572,10 +575,15 @@ async fn inject_text(app: tauri::AppHandle, text: String) -> Result<(), String> 
     }
     #[cfg(target_os = "windows")]
     {
-        // Close any menu bar that Alt may have activated, then paste
-        let _ = std::process::Command::new("powershell")
-            .args(["-Command", &format!("(New-Object -ComObject WScript.Shell).SendKeys('{{ESC}}^v')")])
-            .spawn();
+        use enigo::{Enigo, Keyboard, Key, Direction, Settings};
+        let mut enigo = Enigo::new(&Settings::default())
+            .map_err(|e| format!("enigo init: {:?}", e))?;
+        enigo.key(Key::Control, Direction::Press)
+            .map_err(|e| format!("enigo ctrl down: {:?}", e))?;
+        enigo.key(Key::V, Direction::Click)
+            .map_err(|e| format!("enigo v: {:?}", e))?;
+        enigo.key(Key::Control, Direction::Release)
+            .map_err(|e| format!("enigo ctrl up: {:?}", e))?;
     }
 
     Ok(())
