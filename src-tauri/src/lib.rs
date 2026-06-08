@@ -567,27 +567,57 @@ async fn transcribe_audio_sse(audio_b64: String, settings: AppSettings, app: tau
 
 #[tauri::command]
 async fn inject_text(app: tauri::AppHandle, text: String) -> Result<(), String> {
-    use tauri_plugin_clipboard_manager::ClipboardExt;
     log::info!("inject_text → len={} chars", text.len());
-    app.clipboard().write_text(&text).map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::mem::size_of;
+        use windows::Win32::UI::Input::KeyboardAndMouse::*;
+
+        for ch in text.encode_utf16() {
+            let ki = KEYBDINPUT {
+                wVk: VIRTUAL_KEY(0),
+                wScan: ch,
+                dwFlags: KEYEVENTF_UNICODE,
+                time: 0,
+                dwExtraInfo: 0,
+            };
+            unsafe {
+                SendInput(
+                    &[INPUT {
+                        r#type: INPUT_KEYBOARD,
+                        Anonymous: INPUT_0 { ki },
+                    }],
+                    size_of::<INPUT>() as i32,
+                );
+            }
+
+            let ki = KEYBDINPUT {
+                wVk: VIRTUAL_KEY(0),
+                wScan: ch,
+                dwFlags: KEYEVENTF_UNICODE | KEYEVENTF_KEYUP,
+                time: 0,
+                dwExtraInfo: 0,
+            };
+            unsafe {
+                SendInput(
+                    &[INPUT {
+                        r#type: INPUT_KEYBOARD,
+                        Anonymous: INPUT_0 { ki },
+                    }],
+                    size_of::<INPUT>() as i32,
+                );
+            }
+        }
+    }
 
     #[cfg(target_os = "macos")]
     {
+        use tauri_plugin_clipboard_manager::ClipboardExt;
+        app.clipboard().write_text(&text).map_err(|e| e.to_string())?;
         let _ = std::process::Command::new("osascript")
             .args(["-e", "tell application \"System Events\" to keystroke \"v\" using command down"])
             .spawn();
-    }
-    #[cfg(target_os = "windows")]
-    {
-        use enigo::{Enigo, Keyboard, Key, Direction, Settings};
-        let mut enigo = Enigo::new(&Settings::default())
-            .map_err(|e| format!("enigo init: {:?}", e))?;
-        enigo.key(Key::Control, Direction::Press)
-            .map_err(|e| format!("enigo ctrl down: {:?}", e))?;
-        enigo.key(Key::V, Direction::Click)
-            .map_err(|e| format!("enigo v: {:?}", e))?;
-        enigo.key(Key::Control, Direction::Release)
-            .map_err(|e| format!("enigo ctrl up: {:?}", e))?;
     }
 
     Ok(())
