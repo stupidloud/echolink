@@ -134,8 +134,15 @@ onMounted(async () => {
       console.log('[event] transcript-done → final length:', text.length)
       transcript.value = text
       historyTexts.value.push(text)
+      let protocol = 'openai'
       try {
-        await invoke('insert_history', { text, protocol: settings.protocol || 'openai', targetApp: '当前应用' })
+        const settings = await invoke('get_settings')
+        protocol = settings.protocol || 'openai'
+      } catch (e) {
+        console.warn('[dashboard] get_settings failed:', e)
+      }
+      try {
+        await invoke('insert_history', { text, protocol, targetApp: '当前应用' })
       } catch (e) {
         console.warn('[dashboard] insert_history failed:', e)
       }
