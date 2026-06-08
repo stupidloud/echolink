@@ -84,6 +84,28 @@ onMounted(async () => {
       }
     }))
 
+    // Frontend key handler: catches AltGr when Echolink has focus
+    const onKey = (e) => {
+      if (e.code === 'AltRight' || e.key === 'AltGraph') {
+        e.preventDefault()
+        if (e.type === 'keydown' && !isRecording.value) {
+          console.log('[key] AltGr down (focused)')
+          isRecording.value = true
+          startRecording()
+        } else if (e.type === 'keyup' && isRecording.value) {
+          console.log('[key] AltGr up (focused)')
+          isRecording.value = false
+          stopRecording()
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('keyup', onKey)
+    unlistens.push(() => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keyup', onKey)
+    })
+
     unlistens.push(await listen('transcript-delta', (e) => {
       if (isTranscribing.value) {
         console.log('[event] transcript-delta → +' + e.payload.length + ' chars')
@@ -270,12 +292,14 @@ async function handleTranscribeWebM() {
     const blob = new Blob(audioChunks, { type: 'audio/webm' })
     const base64 = await fileToBase64(blob)
     const settings = await invoke('get_settings')
+    console.log('[api] transcribe_audio start → size:', (base64.length * 0.75).toFixed(0), 'bytes, model:', settings.model)
     const text = await invoke('transcribe_audio', { audioB64: base64, settings })
+    console.log('[api] transcribe_audio done →', text.length, 'chars')
     transcript.value = text
     await invoke('insert_history', { text, protocol: settings.protocol || 'openai', target_app: '当前应用' })
     await invoke('inject_text', { text })
   } catch (e) {
-    console.warn('transcribe failed:', e)
+    console.warn('[api] transcribe_audio failed:', e)
   } finally {
     audioChunks = []
   }
@@ -287,11 +311,12 @@ async function handleTranscribePcm() {
     const pcmBytes = mergePcmChunks()
     const base64 = arrayBufferToBase64(pcmBytes.buffer)
     const settings = await invoke('get_settings')
+    console.log('[api] transcribe_audio_sse start → size:', pcmBytes.length, 'bytes, model:', settings.model)
     isTranscribing.value = true
     transcript.value = ''
     await invoke('transcribe_audio_sse', { audioB64: base64, settings })
   } catch (e) {
-    console.warn('transcribe_sse failed:', e)
+    console.warn('[api] transcribe_audio_sse failed:', e)
     isTranscribing.value = false
   } finally {
     pcmChunks.length = 0

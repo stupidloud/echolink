@@ -130,6 +130,7 @@ pub fn run() {
     let state = Mutex::new(AppState::default());
 
     tauri::Builder::default()
+        .device_event_filter(tauri::DeviceEventFilter::Never)
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Info)
