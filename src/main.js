@@ -48,19 +48,11 @@ async function setupPlugins() {
 
   try {
     unlistenRecording = await listen('recording-state', (event) => {
-      console.log('[event] recording-state →', event.payload)
       app.config.globalProperties.$isRecording = event.payload
     })
-    console.log('[init] event listener registered OK')
   } catch (e) {
     console.warn('[init] event listen failed:', e)
   }
-
-  try {
-    await listen('rdev-status', (event) => {
-      console.log('[rdev]', event.payload)
-    })
-  } catch {}
 }
 
 setupPlugins().then(() => {
