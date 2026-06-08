@@ -13,22 +13,38 @@ app.use(router)
 let unlistenRecording = null
 
 async function setupPlugins() {
+  let store = null
+  let clipboard = null
+  let db = null
+
   try {
-    const [store, clipboard, db] = await Promise.all([
-      load('settings.json'),
-      Promise.resolve({ readText, writeText }),
-      Database.load('sqlite:echolink.db'),
-    ])
+    store = await load('settings.json')
+  } catch (e) {
+    console.warn('[init] store failed:', e)
+  }
 
-    app.provide('store', store)
-    app.provide('clipboard', clipboard)
-    app.provide('db', db)
+  try {
+    clipboard = { readText, writeText }
+  } catch (e) {
+    console.warn('[init] clipboard failed:', e)
+  }
 
+  try {
+    db = await Database.load('sqlite:echolink.db')
+  } catch (e) {
+    console.warn('[init] sql failed:', e)
+  }
+
+  if (store) app.provide('store', store)
+  if (clipboard) app.provide('clipboard', clipboard)
+  if (db) app.provide('db', db)
+
+  try {
     unlistenRecording = await listen('recording-state', (event) => {
       app.config.globalProperties.$isRecording = event.payload
     })
   } catch (e) {
-    console.warn('Tauri plugins init failed, running in browser mode:', e)
+    console.warn('[init] event listen failed:', e)
   }
 }
 
