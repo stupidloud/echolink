@@ -73,7 +73,11 @@ const avgSpeed = computed(() => totalMinutes.value > 0 ? Math.round(totalChars.v
 onMounted(async () => {
   try {
     historyTexts.value = (await invoke('get_history', { limit: 99999 })).map(r => r.text)
+  } catch {
+    console.warn('[dashboard] get_history failed')
+  }
 
+  try {
     unlistens.push(await listen('recording-state', async (event) => {
       console.log('[event] recording-state →', event.payload)
       isRecording.value = event.payload
@@ -83,36 +87,44 @@ onMounted(async () => {
         await stopRecording()
       }
     }))
+  } catch {
+    console.warn('[dashboard] listen recording-state failed')
+  }
 
-    // Frontend key handler: catches AltGr when Echolink has focus
-    const onKey = (e) => {
-      if (e.code === 'AltRight' || e.key === 'AltGraph') {
-        e.preventDefault()
-        if (e.type === 'keydown' && !isRecording.value) {
-          console.log('[key] AltGr down (focused)')
-          isRecording.value = true
-          startRecording()
-        } else if (e.type === 'keyup' && isRecording.value) {
-          console.log('[key] AltGr up (focused)')
-          isRecording.value = false
-          stopRecording()
-        }
+  // Frontend key handler: catches AltGr when Echolink has focus
+  const onKey = (e) => {
+    if (e.code === 'AltRight' || e.key === 'AltGraph') {
+      e.preventDefault()
+      if (e.type === 'keydown' && !isRecording.value) {
+        console.log('[key] AltGr down (focused)')
+        isRecording.value = true
+        startRecording()
+      } else if (e.type === 'keyup' && isRecording.value) {
+        console.log('[key] AltGr up (focused)')
+        isRecording.value = false
+        stopRecording()
       }
     }
-    window.addEventListener('keydown', onKey)
-    window.addEventListener('keyup', onKey)
-    unlistens.push(() => {
-      window.removeEventListener('keydown', onKey)
-      window.removeEventListener('keyup', onKey)
-    })
+  }
+  window.addEventListener('keydown', onKey)
+  window.addEventListener('keyup', onKey)
+  unlistens.push(() => {
+    window.removeEventListener('keydown', onKey)
+    window.removeEventListener('keyup', onKey)
+  })
 
+  try {
     unlistens.push(await listen('transcript-delta', (e) => {
       if (isTranscribing.value) {
         console.log('[event] transcript-delta → +' + e.payload.length + ' chars')
         transcript.value += e.payload
       }
     }))
+  } catch {
+    console.warn('[dashboard] listen transcript-delta failed')
+  }
 
+  try {
     unlistens.push(await listen('transcript-done', async (e) => {
       if (!isTranscribing.value) return
       const text = e.payload
@@ -125,7 +137,7 @@ onMounted(async () => {
       isTranscribing.value = false
     }))
   } catch {
-    // browser fallback
+    console.warn('[dashboard] listen transcript-done failed')
   }
 })
 
