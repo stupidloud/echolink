@@ -20,6 +20,7 @@ async function setupPlugins() {
 
   try {
     await attachConsole()
+    console.log('[init] attachConsole OK')
   } catch (e) {
     console.warn('[init] attachConsole failed:', e)
   }

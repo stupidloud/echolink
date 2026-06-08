@@ -148,8 +148,10 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
         .setup(|app| {
+            log::info!("Rust backend started → log forwarding test");
             let handle = app.handle().clone();
             std::thread::spawn(move || {
+                log::info!("rdev listen thread started");
                 if let Err(e) = rdev::listen(move |event| {
                     match event.event_type {
                         rdev::EventType::KeyPress(rdev::Key::AltGr) => {
