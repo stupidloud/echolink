@@ -149,6 +149,13 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         .setup(|app| {
             log::info!("Rust backend started");
+
+            #[cfg(target_os = "windows")]
+            {
+                let _ = prevent_alt_win_menu::start(Default::default())
+                    .map_err(|e| log::error!("prevent-alt-win-menu: {:?}", e));
+            }
+
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 log::info!("rdev thread started");
@@ -160,9 +167,6 @@ pub fn run() {
                             if !alt_down {
                                 alt_down = true;
                                 log::info!("AltGr pressed");
-                                // Close any menu bar Alt may have activated
-                                rdev::simulate(&rdev::EventType::KeyPress(rdev::Key::Escape)).ok();
-                                rdev::simulate(&rdev::EventType::KeyRelease(rdev::Key::Escape)).ok();
                                 let _ = cb_handle.emit("recording-state", true);
                             }
                         }
