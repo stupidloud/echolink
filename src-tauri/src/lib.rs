@@ -613,11 +613,42 @@ async fn inject_text(app: tauri::AppHandle, text: String) -> Result<(), String> 
 
     #[cfg(target_os = "macos")]
     {
-        use tauri_plugin_clipboard_manager::ClipboardExt;
-        app.clipboard().write_text(&text).map_err(|e| e.to_string())?;
-        let _ = std::process::Command::new("osascript")
-            .args(["-e", "tell application \"System Events\" to keystroke \"v\" using command down"])
-            .spawn();
+        use std::ffi::c_void;
+
+        #[link(name = "CoreGraphics", kind = "framework")]
+        extern "C" {
+            fn CGEventCreateKeyboardEvent(
+                source: *const c_void,
+                keycode: u16,
+                keydown: bool,
+            ) -> *mut c_void;
+            fn CGEventKeyboardSetUnicodeString(
+                event: *mut c_void,
+                length: usize,
+                string: *const u16,
+            );
+            fn CGEventPost(tap: u32, event: *mut c_void);
+            fn CFRelease(event: *mut c_void);
+        }
+
+        const K_CG_HID_EVENT_TAP: u32 = 0;
+
+        let utf16: Vec<u16> = text.encode_utf16().collect();
+        unsafe {
+            for chunk in utf16.chunks(20) {
+                let event = CGEventCreateKeyboardEvent(std::ptr::null(), 0, true);
+                CGEventKeyboardSetUnicodeString(event, chunk.len(), chunk.as_ptr());
+                CGEventPost(K_CG_HID_EVENT_TAP, event);
+                CFRelease(event);
+
+                std::thread::sleep(std::time::Duration::from_millis(4));
+
+                let event = CGEventCreateKeyboardEvent(std::ptr::null(), 0, false);
+                CGEventKeyboardSetUnicodeString(event, chunk.len(), chunk.as_ptr());
+                CGEventPost(K_CG_HID_EVENT_TAP, event);
+                CFRelease(event);
+            }
+        }
     }
 
     Ok(())
