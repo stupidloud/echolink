@@ -141,12 +141,10 @@ pub fn run() {
             std::thread::spawn(move || {
                 if let Err(e) = rdev::listen(move |event| {
                     match event.event_type {
-                        rdev::EventType::KeyPress(rdev::Key::Alt)
-                        | rdev::EventType::KeyPress(rdev::Key::AltGr) => {
+                        rdev::EventType::KeyPress(rdev::Key::AltGr) => {
                             let _ = handle.emit("recording-state", true);
                         }
-                        rdev::EventType::KeyRelease(rdev::Key::Alt)
-                        | rdev::EventType::KeyRelease(rdev::Key::AltGr) => {
+                        rdev::EventType::KeyRelease(rdev::Key::AltGr) => {
                             let _ = handle.emit("recording-state", false);
                         }
                         _ => {}
