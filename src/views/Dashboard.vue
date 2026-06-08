@@ -135,7 +135,7 @@ onMounted(async () => {
       const settings = await invoke('get_settings')
       transcript.value = text
       historyTexts.value.push(text)
-      await invoke('insert_history', { text, protocol: settings.protocol || 'openai', target_app: '当前应用' })
+      await invoke('insert_history', { text, protocol: settings.protocol || 'openai', targetApp: '当前应用' })
       await invoke('inject_text', { text })
       isTranscribing.value = false
     }))
