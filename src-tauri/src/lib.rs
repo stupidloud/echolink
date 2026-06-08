@@ -572,8 +572,9 @@ async fn inject_text(app: tauri::AppHandle, text: String) -> Result<(), String> 
     }
     #[cfg(target_os = "windows")]
     {
+        // Close any menu bar that Alt may have activated, then paste
         let _ = std::process::Command::new("powershell")
-            .args(["-Command", "(New-Object -ComObject WScript.Shell).SendKeys('^v')"])
+            .args(["-Command", &format!("(New-Object -ComObject WScript.Shell).SendKeys('{{ESC}}^v')")])
             .spawn();
     }
 
