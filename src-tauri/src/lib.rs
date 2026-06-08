@@ -142,15 +142,17 @@ pub fn run() {
                 if let Err(e) = rdev::listen(move |event| {
                     match event.event_type {
                         rdev::EventType::KeyPress(rdev::Key::AltGr) => {
+                            log::info!("AltGr pressed → recording-state: true");
                             let _ = handle.emit("recording-state", true);
                         }
                         rdev::EventType::KeyRelease(rdev::Key::AltGr) => {
+                            log::info!("AltGr released → recording-state: false");
                             let _ = handle.emit("recording-state", false);
                         }
                         _ => {}
                     }
                 }) {
-                    eprintln!("rdev listen error: {:?}", e);
+                    log::error!("rdev listen failed: {:?}", e);
                 }
             });
 
@@ -248,6 +250,7 @@ async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> {
         .get(key)
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or(default);
+    log::info!("get_settings → protocol={}, model={}", s.protocol, s.model);
     Ok(s)
 }
 
@@ -258,6 +261,7 @@ async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Result<(
     let value = serde_json::to_value(settings).map_err(|e| e.to_string())?;
     store.set("settings", value);
     store.save();
+    log::info!("save_settings → saved");
     Ok(())
 }
 
@@ -311,6 +315,7 @@ async fn insert_history(
         [],
     )
     .map_err(|e| e.to_string())?;
+    log::info!("insert_history → protocol={}, text_len={}", protocol, text.len());
     conn.execute(
         "INSERT INTO history (id, timestamp, text, protocol, target_app) VALUES (?1, ?2, ?3, ?4, ?5)",
         rusqlite::params![
@@ -327,6 +332,7 @@ async fn insert_history(
 
 #[tauri::command]
 async fn delete_history(_app: tauri::AppHandle, id: String) -> Result<(), String> {
+    log::info!("delete_history → id={}", id);
     let conn = db_conn()?;
     conn.execute("DELETE FROM history WHERE id = ?1", [id])
         .map_err(|e| e.to_string())?;
@@ -337,6 +343,8 @@ async fn delete_history(_app: tauri::AppHandle, id: String) -> Result<(), String
 async fn transcribe_audio(audio_b64: String, settings: AppSettings) -> Result<String, String> {
     let client = reqwest::Client::new();
     let url = api_url(&settings.base_url, "/v1/audio/transcriptions");
+    let audio_size = audio_b64.len();
+    log::info!("transcribe_audio → url={}, audio_b64_len={}", url, audio_size);
     let audio_bytes = base64::decode(&audio_b64).map_err(|e| e.to_string())?;
     let part = reqwest::multipart::Part::bytes(audio_bytes)
         .file_name("audio.webm")
@@ -353,9 +361,11 @@ async fn transcribe_audio(audio_b64: String, settings: AppSettings) -> Result<St
         .map_err(|e| e.to_string())?;
 
     if !resp.status().is_success() {
+        log::error!("transcribe_audio HTTP {}", resp.status());
         return Err(format!("ASR error: {}", resp.status()));
     }
     let text: String = resp.text().await.map_err(|e| e.to_string())?;
+    log::info!("transcribe_audio → OK, len={}", text.len());
     Ok(text)
 }
 
@@ -407,6 +417,8 @@ struct StepFunSseEvent {
 async fn transcribe_audio_sse(audio_b64: String, settings: AppSettings, app: tauri::AppHandle) -> Result<String, String> {
     let client = reqwest::Client::new();
     let url = api_url(&settings.base_url, "/v1/audio/asr/sse");
+    let audio_size = audio_b64.len();
+    log::info!("transcribe_audio_sse → url={}, audio_b64_len={}", url, audio_size);
 
     let body = StepFunAsrRequest {
         audio: StepFunAudio {
@@ -468,6 +480,7 @@ async fn transcribe_audio_sse(audio_b64: String, settings: AppSettings, app: tau
                         "transcript.text.delta" => {
                             if let Some(ref d) = evt.delta {
                                 full_text.push_str(d);
+                                log::info!("transcript.text.delta → +{} chars", d.len());
                                 let _ = app.emit("transcript-delta", d.clone());
                             }
                         }
@@ -475,10 +488,12 @@ async fn transcribe_audio_sse(audio_b64: String, settings: AppSettings, app: tau
                             if let Some(ref t) = evt.text {
                                 full_text = t.clone();
                             }
+                            log::info!("transcript.text.done → total={} chars", full_text.len());
                             let _ = app.emit("transcript-done", full_text.clone());
                         }
                         "error" => {
                             let err_msg = evt.message.clone().unwrap_or_default();
+                            log::error!("transcript.error → {}", err_msg);
                             let _ = app.emit("transcript-error", err_msg.clone());
                             return Err(format!("ASR SSE error: {}", err_msg));
                         }
@@ -517,12 +532,14 @@ async fn transcribe_audio_sse(audio_b64: String, settings: AppSettings, app: tau
         }
     }
 
+    log::info!("transcribe_audio_sse → final_len={}", full_text.len());
     Ok(full_text)
 }
 
 #[tauri::command]
 async fn inject_text(app: tauri::AppHandle, text: String) -> Result<(), String> {
     use tauri_plugin_clipboard_manager::ClipboardExt;
+    log::info!("inject_text → len={} chars", text.len());
     app.clipboard().write_text(&text).map_err(|e| e.to_string())?;
 
     #[cfg(target_os = "macos")]
@@ -550,6 +567,7 @@ fn get_app_version() -> String {
 async fn verify_connection(settings: AppSettings) -> Result<String, String> {
     let client = reqwest::Client::new();
     let url = api_url(&settings.base_url, "/v1/models");
+    log::info!("verify_connection → url={}, protocol={}", url, settings.protocol);
 
     let resp = client
         .get(&url)
@@ -559,7 +577,10 @@ async fn verify_connection(settings: AppSettings) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
 
     match resp.status().as_u16() {
-        401 | 403 => Err("❌ API Key 无效或已过期".to_string()),
+        401 | 403 => {
+            log::error!("verify_connection → 401/403");
+            Err("❌ API Key 无效或已过期".to_string())
+        }
         200..=299 => {
             let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
             let models = body["data"]

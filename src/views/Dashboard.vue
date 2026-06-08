@@ -75,6 +75,7 @@ onMounted(async () => {
     historyTexts.value = (await invoke('get_history', { limit: 99999 })).map(r => r.text)
 
     unlistens.push(await listen('recording-state', async (event) => {
+      console.log('[event] recording-state →', event.payload)
       isRecording.value = event.payload
       if (event.payload) {
         await startRecording()
@@ -85,6 +86,7 @@ onMounted(async () => {
 
     unlistens.push(await listen('transcript-delta', (e) => {
       if (isTranscribing.value) {
+        console.log('[event] transcript-delta → +' + e.payload.length + ' chars')
         transcript.value += e.payload
       }
     }))
@@ -92,6 +94,7 @@ onMounted(async () => {
     unlistens.push(await listen('transcript-done', async (e) => {
       if (!isTranscribing.value) return
       const text = e.payload
+      console.log('[event] transcript-done → final length:', text.length)
       const settings = await invoke('get_settings')
       transcript.value = text
       historyTexts.value.push(text)
@@ -114,11 +117,14 @@ function startLevelMonitor(ctx, source) {
   source.connect(analyserNode)
   const dataArray = new Uint8Array(analyserNode.frequencyBinCount)
   const { emit: tauriEmit } = window.__TAURI__?.event || {}
+  let frameCount = 0
   function tick() {
     analyserNode.getByteFrequencyData(dataArray)
     let sum = 0
     for (let i = 0; i < dataArray.length; i++) sum += dataArray[i]
     const avg = sum / dataArray.length / 255
+    if (frameCount % 50 === 0) console.log('[audio-level]', avg.toFixed(3))
+    frameCount++
     if (tauriEmit) tauriEmit('audio-level', avg)
     levelRafId = requestAnimationFrame(tick)
   }
@@ -139,9 +145,11 @@ function stopLevelMonitor() {
 async function startRecording() {
   try {
     const settings = await invoke('get_settings')
+    console.log('[mic] startRecording → protocol:', settings.protocol)
     currentStream = await navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true }
     })
+    console.log('[mic] getUserMedia OK, tracks:', currentStream.getAudioTracks().length)
     const protocol = settings.protocol || 'openai'
     if (protocol === 'stepfun') {
       await startPcmRecording(currentStream)
@@ -149,7 +157,7 @@ async function startRecording() {
       await startWebmRecording(currentStream)
     }
   } catch (e) {
-    console.error('Microphone access denied:', e)
+    console.error('[mic] getUserMedia FAILED:', e)
     transcript.value = '⚠️ 无法访问麦克风，请检查权限设置'
   }
 }
@@ -221,6 +229,7 @@ async function stopRecording() {
   stopLevelMonitor()
   const settings = await invoke('get_settings')
   const protocol = settings.protocol || 'openai'
+  console.log('[mic] stopRecording → protocol:', protocol)
 
   if (protocol === 'stepfun') {
     if (gainNode) {
