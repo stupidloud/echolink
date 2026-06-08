@@ -44,7 +44,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import { listen } from '@tauri-apps/api/event'
+import { listen, emit } from '@tauri-apps/api/event'
 
 const isRecording = ref(false)
 const transcript = ref('')
@@ -80,6 +80,7 @@ onMounted(async () => {
   try {
     unlistens.push(await listen('recording-state', async (event) => {
       console.log('[event] recording-state →', event.payload)
+      if (event.payload === isRecording.value) return
       isRecording.value = event.payload
       if (event.payload) {
         await startRecording()
@@ -98,10 +99,12 @@ onMounted(async () => {
       if (e.type === 'keydown' && !isRecording.value) {
         console.log('[key] AltGr down (focused)')
         isRecording.value = true
+        emit('recording-state', true)
         await startRecording()
       } else if (e.type === 'keyup' && isRecording.value) {
         console.log('[key] AltGr up (focused)')
         isRecording.value = false
+        emit('recording-state', false)
         await stopRecording()
       }
     }
