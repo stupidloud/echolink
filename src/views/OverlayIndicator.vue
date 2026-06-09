@@ -11,12 +11,14 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, emit } from '@tauri-apps/api/event'
+import { info, warn, error } from '@tauri-apps/plugin-log'
 
 // This overlay window owns the whole capture + transcription pipeline, so it
-// keeps working while the main window is closed/destroyed. It is created once at
-// startup and stays alive (hidden between dictations), shown while Right Alt is
-// held. It drives its own waveform locally and pushes results to the main window
-// (if alive) via events.
+// keeps working while the main window is closed/destroyed. It stays shown at all
+// times (transparent + click-through), revealing its pill via v-show on
+// recording-state. It drives its waveform locally and pushes results to the main
+// window (if alive) via events. Logs go through plugin-log so they surface in the
+// main window console (prefix [ov]).
 
 const isRecording = ref(false)
 const barHeights = ref([8, 8, 8, 8, 8])
@@ -36,8 +38,10 @@ const pcmChunks = []
 let unlistenRecording = null
 
 onMounted(async () => {
+  info('[ov] OverlayIndicator mounted')
   try {
     unlistenRecording = await listen('recording-state', async (event) => {
+      info('[ov] recording-state=' + event.payload)
       if (event.payload === isRecording.value) return
       isRecording.value = event.payload
       if (event.payload) {
@@ -50,7 +54,10 @@ onMounted(async () => {
         barHeights.value = [8, 8, 8, 8, 8]
       }
     })
-  } catch {}
+    info('[ov] recording-state listener attached')
+  } catch (e) {
+    error('[ov] failed to attach listener: ' + e)
+  }
 })
 
 onUnmounted(() => {
@@ -108,17 +115,20 @@ function stopLevelMonitor() {
 async function startRecording() {
   try {
     const settings = await invoke('get_settings')
+    const protocol = settings.protocol || 'openai'
+    info('[ov] startRecording protocol=' + protocol)
     currentStream = await navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true }
     })
-    const protocol = settings.protocol || 'openai'
+    info('[ov] getUserMedia OK, tracks=' + currentStream.getAudioTracks().length)
     if (protocol === 'stepfun') {
       await startPcmRecording(currentStream)
     } else {
       await startWebmRecording(currentStream)
     }
+    info('[ov] capture started')
   } catch (e) {
-    console.error('[overlay] getUserMedia FAILED:', e)
+    error('[ov] startRecording FAILED: ' + e)
     // The tiny overlay can't reliably show a permission prompt; let the main
     // window surface the problem instead.
     try { await emit('mic-denied') } catch {}
@@ -166,6 +176,7 @@ async function stopRecording() {
   stopLevelMonitor()
   const settings = await invoke('get_settings')
   const protocol = settings.protocol || 'openai'
+  info('[ov] stopRecording protocol=' + protocol + ' pcmChunks=' + pcmChunks.length + ' webmChunks=' + audioChunks.length)
 
   if (protocol === 'stepfun') {
     if (scriptProcessor) { try { scriptProcessor.disconnect() } catch {} scriptProcessor = null }
@@ -185,26 +196,29 @@ async function stopRecording() {
 
 // ---- transcription ----
 async function finishTranscript(text, protocol) {
-  if (!text) return
+  if (!text) { warn('[ov] finishTranscript: empty text, skipping'); return }
+  info('[ov] finishTranscript len=' + text.length + ' → insert_history + inject_text')
   try { await invoke('insert_history', { text, protocol, targetApp: '当前应用' }) }
-  catch (e) { console.warn('[overlay] insert_history failed:', e) }
+  catch (e) { warn('[ov] insert_history failed: ' + e) }
   try { await invoke('inject_text', { text }) }
-  catch (e) { console.warn('[overlay] inject_text failed:', e) }
+  catch (e) { warn('[ov] inject_text failed: ' + e) }
   try { await emit('history-updated') } catch {}
 }
 
 async function handleTranscribeWebM(settings) {
   try {
-    if (audioChunks.length === 0) return
+    if (audioChunks.length === 0) { warn('[ov] webm: no audio captured'); return }
     const blob = new Blob(audioChunks, { type: 'audio/webm' })
     const base64 = await fileToBase64(blob)
     const protocol = settings.protocol || 'openai'
     const cmd = protocol === 'openrouter' ? 'transcribe_audio_openrouter' : 'transcribe_audio'
+    info('[ov] ' + cmd + ' start, bytes=' + Math.round(base64.length * 0.75))
     const text = await invoke(cmd, { audioB64: base64, settings })
+    info('[ov] ' + cmd + ' done, len=' + (text ? text.length : 0))
     await emit('transcript-done', text) // webm has no streaming; push final to main
     await finishTranscript(text, protocol)
   } catch (e) {
-    console.warn('[overlay] webm transcribe failed:', e)
+    error('[ov] webm transcribe failed: ' + e)
   } finally {
     audioChunks = []
   }
@@ -212,15 +226,17 @@ async function handleTranscribeWebM(settings) {
 
 async function handleTranscribePcm(settings) {
   try {
-    if (pcmChunks.length === 0) return
+    if (pcmChunks.length === 0) { warn('[ov] pcm: no audio captured'); return }
     const pcmBytes = mergePcmChunks()
     const base64 = arrayBufferToBase64(pcmBytes.buffer)
+    info('[ov] transcribe_audio_sse start, bytes=' + pcmBytes.length)
     // The SSE backend streams transcript-delta / transcript-done to all windows
     // itself, so the main window gets the live text; we only need the final.
     const text = await invoke('transcribe_audio_sse', { audioB64: base64, settings })
+    info('[ov] transcribe_audio_sse done, len=' + (text ? text.length : 0))
     await finishTranscript(text, settings.protocol || 'stepfun')
   } catch (e) {
-    console.warn('[overlay] sse transcribe failed:', e)
+    error('[ov] sse transcribe failed: ' + e)
   } finally {
     pcmChunks.length = 0
   }
