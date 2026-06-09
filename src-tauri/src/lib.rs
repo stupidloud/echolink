@@ -256,9 +256,14 @@ pub fn run() {
             .transparent(true)
             .resizable(false)
             .skip_taskbar(true)
+            .shadow(false)
             .inner_size(120.0, 40.0)
             .build()
             .expect("failed to build overlay window");
+
+            // Belt-and-suspenders with transparent(true): some WebView2/WKWebView
+            // setups still paint an opaque window background unless it is cleared.
+            let _ = _overlay.set_background_color(Some(tauri::webview::Color(0, 0, 0, 0)));
 
             // Position at the bottom-center of the primary monitor
             if let Ok(Some(monitor)) = _overlay.primary_monitor() {
