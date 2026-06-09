@@ -1,5 +1,7 @@
 <template>
-  <div class="app-container">
+  <!-- Overlay window (index.html#/overlay) renders ONLY the indicator, no app chrome -->
+  <router-view v-if="isOverlay" />
+  <div v-else class="app-container">
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-top">
@@ -55,6 +57,10 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Home, History, Server, Settings, HelpCircle } from 'lucide-vue-next'
 import { listen, emit } from '@tauri-apps/api/event'
+
+// True only inside the standalone overlay window, which loads index.html#/overlay.
+// In that window we skip the sidebar/main/floating chrome entirely.
+const isOverlay = window.location.hash.startsWith('#/overlay')
 
 const isRecording = ref(false)
 const barHeights = ref([8, 8, 8, 8, 8])
@@ -128,7 +134,6 @@ const statusText = computed(() => {
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: #F4F2EF;
   color: #1A1A1A;
 }
 

@@ -254,10 +254,24 @@ pub fn run() {
             .decorations(false)
             .always_on_top(true)
             .transparent(true)
+            .resizable(false)
+            .skip_taskbar(true)
             .inner_size(120.0, 40.0)
-            .position(0.0, 0.0)
             .build()
             .expect("failed to build overlay window");
+
+            // Position at the bottom-center of the primary monitor
+            if let Ok(Some(monitor)) = _overlay.primary_monitor() {
+                let msize = monitor.size();
+                let mpos = monitor.position();
+                let scale = monitor.scale_factor();
+                let win_w = (120.0 * scale) as i32;
+                let win_h = (40.0 * scale) as i32;
+                let margin = (48.0 * scale) as i32;
+                let x = mpos.x + (msize.width as i32 - win_w) / 2;
+                let y = mpos.y + msize.height as i32 - win_h - margin;
+                let _ = _overlay.set_position(tauri::PhysicalPosition::new(x, y));
+            }
             let _ = _overlay.hide();
 
             Ok(())
