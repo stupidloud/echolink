@@ -187,14 +187,18 @@ pub fn run() {
 
             #[cfg(target_os = "windows")]
             {
-                use prevent_alt_win_menu::event_handler::{Config, MenuTrigger, MenuTriggerEvent};
-                use windows::Win32::UI::Input::KeyboardAndMouse::VK__none_;
+                // Use the crate's own re-exported `windows` types: it depends on a
+                // different `windows` version than this app, so VK__none_ must come
+                // from KeyboardAndMouse here or the VIRTUAL_KEY types won't match.
+                use prevent_alt_win_menu::event_handler::{
+                    Config, HoldEvent, KeyboardAndMouse, MenuTrigger, MenuTriggerEvent,
+                };
                 // Only suppress the Alt window menu (Right Alt is our push-to-talk
                 // key). Leave the Win key alone so the Start menu still opens --
                 // the default config suppressed both.
-                let config: Config = Config::default().set_on_released(|hold| {
+                let config: Config = Config::default().set_on_released(|hold: HoldEvent| {
                     match hold.press.menu_trigger() {
-                        Some(MenuTrigger::Alt) => Some(VK__none_),
+                        Some(MenuTrigger::Alt) => Some(KeyboardAndMouse::VK__none_),
                         _ => None,
                     }
                 });
