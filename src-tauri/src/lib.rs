@@ -241,8 +241,7 @@ pub fn run() {
             .title("")
             .decorations(false)
             .always_on_top(true)
-            .width(120)
-            .height(40)
+            .inner_size(120.0, 40.0)
             .position(0, 0)
             .build()
             .expect("failed to build overlay window");
