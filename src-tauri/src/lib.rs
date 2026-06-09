@@ -146,7 +146,7 @@ fn show_or_create_main(app: &tauri::AppHandle) {
     } else {
         match WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
             .title("Echolink")
-            .inner_size(1280.0, 800.0)
+            .inner_size(960.0, 600.0)
             .min_inner_size(960.0, 600.0)
             .resizable(true)
             .build()
@@ -165,6 +165,11 @@ pub fn run() {
     let state = Mutex::new(AppState::default());
 
     tauri::Builder::default()
+        // Must be registered first: a second launch focuses the existing window
+        // instead of starting another process.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            show_or_create_main(app);
+        }))
         .device_event_filter(tauri::DeviceEventFilter::Never)
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -326,6 +331,7 @@ pub fn run() {
             verify_connection,
             inject_text,
             get_app_version,
+            is_main_focused,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -800,6 +806,13 @@ async fn inject_text(app: tauri::AppHandle, text: String) -> Result<(), String> 
 #[tauri::command]
 fn get_app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[tauri::command]
+fn is_main_focused(app: tauri::AppHandle) -> bool {
+    app.get_webview_window("main")
+        .and_then(|w| w.is_focused().ok())
+        .unwrap_or(false)
 }
 
 #[tauri::command]

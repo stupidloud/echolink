@@ -14,8 +14,8 @@
     "windows": [
       {
         "title": "Echolink",
-        "width": 1280,
-        "height": 800,
+        "width": 960,
+        "height": 600,
         "minWidth": 960,
         "minHeight": 600,
         "resizable": true,

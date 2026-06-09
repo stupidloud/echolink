@@ -1,5 +1,5 @@
 <template>
-  <div v-show="isRecording" class="overlay recording">
+  <div v-show="isRecording && showPill" class="overlay recording">
     <div class="waveform">
       <span v-for="(h, i) in barHeights" :key="i" class="bar" :style="{ height: h + 'px' }"></span>
     </div>
@@ -21,6 +21,7 @@ import { info, warn, error } from '@tauri-apps/plugin-log'
 // main window console (prefix [ov]).
 
 const isRecording = ref(false)
+const showPill = ref(true)
 const barHeights = ref([8, 8, 8, 8, 8])
 
 let mediaRecorder = null
@@ -45,6 +46,10 @@ onMounted(async () => {
       if (event.payload === isRecording.value) return
       isRecording.value = event.payload
       if (event.payload) {
+        // When the main window is focused it shows its own waveform bar, so the
+        // desktop pill would be redundant -- hide it (recording still runs).
+        try { showPill.value = !(await invoke('is_main_focused')) }
+        catch { showPill.value = true }
         barHeights.value = [4, 4, 4, 4, 4]
         await startRecording()
       } else {
