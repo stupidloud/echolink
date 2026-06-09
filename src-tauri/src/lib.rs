@@ -246,6 +246,7 @@ pub fn run() {
             .position(0, 0)
             .build()
             .expect("failed to build overlay window");
+            let _ = _overlay.set_transparent(true);
             let _ = _overlay.hide();
 
             Ok(())
