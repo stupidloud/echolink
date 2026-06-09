@@ -44,18 +44,24 @@
 
       <div class="form-group">
         <label class="form-label">模型名称 (Model)</label>
-        <div class="input-wrapper">
+        <div ref="comboRef" class="input-wrapper model-combo">
           <input
             v-model="form.model"
             type="text"
-            list="model-options"
             class="form-input"
             placeholder="输入或选择模型 ID"
+            @focus="showModels = true"
           />
-          <datalist id="model-options">
-            <option v-for="m in currentModels" :key="m" :value="m" />
-          </datalist>
-          <ChevronDown class="select-icon" />
+          <ChevronDown class="select-icon combo-toggle" @click="showModels = !showModels" />
+          <ul v-if="showModels && currentModels.length" class="model-dropdown">
+            <li
+              v-for="m in currentModels"
+              :key="m"
+              class="model-option"
+              :class="{ active: m === form.model }"
+              @mousedown.prevent="selectModel(m)"
+            >{{ m }}</li>
+          </ul>
         </div>
       </div>
     </div>
@@ -70,7 +76,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { Eye, ChevronDown } from 'lucide-vue-next'
 
@@ -78,11 +84,33 @@ const showKey = ref(false)
 const msg = ref('')
 const msgType = ref('')
 const testing = ref(false)
+const showModels = ref(false)
+const comboRef = ref(null)
+
+function selectModel(m) {
+  form.value.model = m
+  showModels.value = false
+}
+
+function onDocClick(e) {
+  if (comboRef.value && !comboRef.value.contains(e.target)) {
+    showModels.value = false
+  }
+}
 
 const modelOptions = {
   stepfun: ['stepaudio-2.5-asr', 'stepaudio-2-asr-pro'],
   openai: ['gpt-4o-mini-transcribe', 'gpt-4o-transcribe', 'whisper-1'],
-  openrouter: ['openai/whisper-1', 'openai/gpt-4o-mini-transcribe'],
+  openrouter: [
+    'openai/gpt-4o-transcribe',
+    'openai/gpt-4o-mini-transcribe',
+    'openai/whisper-1',
+    'openai/whisper-large-v3-turbo',
+    'openai/whisper-large-v3',
+    'mistralai/voxtral-mini-transcribe',
+    'qwen/qwen3-asr-flash-2026-02-10',
+    'google/chirp-3',
+  ],
 }
 
 const defaultForm = {
@@ -109,6 +137,11 @@ onMounted(async () => {
   } catch {
     // browser fallback
   }
+  document.addEventListener('click', onDocClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', onDocClick)
 })
 
 async function test() {
@@ -253,6 +286,48 @@ async function save() {
   width: 16px;
   height: 16px;
   color: #777777;
+}
+
+.combo-toggle {
+  cursor: pointer;
+}
+
+.model-combo {
+  position: relative;
+}
+
+.model-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: #FFFFFF;
+  border: 1px solid #E5E2DD;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.model-option {
+  padding: 8px 10px;
+  font-size: 14px;
+  color: #1A1A1A;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.model-option:hover {
+  background: #F3F4F6;
+}
+
+.model-option.active {
+  background: #C8B496;
+  color: #FFFFFF;
 }
 
 .actions {

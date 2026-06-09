@@ -59,9 +59,8 @@ describe('ApiSettings', () => {
   it('renders model options from currentModels', async () => {
     const wrapper = mount(ApiSettings)
     await new Promise(r => setTimeout(r, 10))
-    const datalist = wrapper.find('datalist#model-options')
-    const options = datalist.findAll('option')
-    const values = options.map(o => o.attributes('value'))
+    await wrapper.find('.form-input[placeholder="输入或选择模型 ID"]').trigger('focus')
+    const values = wrapper.findAll('.model-option').map(o => o.text())
     expect(values).toContain('stepaudio-2.5-asr')
     expect(values).toContain('stepaudio-2-asr-pro')
   })
@@ -73,10 +72,20 @@ describe('ApiSettings', () => {
 
     await protocolSelect.setValue('openai')
 
-    const datalist = wrapper.find('datalist#model-options')
-    const options = datalist.findAll('option')
-    const values = options.map(o => o.attributes('value'))
+    await wrapper.find('.form-input[placeholder="输入或选择模型 ID"]').trigger('focus')
+    const values = wrapper.findAll('.model-option').map(o => o.text())
     expect(values).toContain('whisper-1')
     expect(values).not.toContain('stepaudio-2.5-asr')
+  })
+
+  it('selecting a model option fills the input and closes the list', async () => {
+    const wrapper = mount(ApiSettings)
+    await new Promise(r => setTimeout(r, 10))
+    await wrapper.find('.form-input[placeholder="输入或选择模型 ID"]').trigger('focus')
+    const opt = wrapper.findAll('.model-option').find(o => o.text() === 'stepaudio-2-asr-pro')
+    await opt.trigger('mousedown')
+    const input = wrapper.find('.form-input[placeholder="输入或选择模型 ID"]')
+    expect(input.element.value).toBe('stepaudio-2-asr-pro')
+    expect(wrapper.findAll('.model-option').length).toBe(0)
   })
 })
