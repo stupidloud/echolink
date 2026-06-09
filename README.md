@@ -1,65 +1,57 @@
 # EchoLink
 
-基于 Editorial Scientific 风格的桌面端语音输入法界面。
+EchoLink 是一款桌面**语音输入法**:在任何应用里按住 **Right Alt(右 Alt 键)** 说话,松开即把你说的话转写成文字,自动输入到当前光标处。
 
-## 技术栈
+## 功能特性
 
-- Vue 3 + Vue Router
-- Vite（前端构建）
-- Tauri（桌面外壳，Rust 后端）
-- Lucide Vue Next（图标库）
+- 🎙️ **全局语音输入** —— 按住 Right Alt 录音,松开自动转写,并把文字输入到当前聚焦的应用(浏览器、聊天工具、编辑器……)。
+- ⚡ **多种识别服务** —— 内置三种协议,填上自己的 API Key 即可用:
+  - **StepFun SSE**(默认,流式,主界面实时显示转写)
+  - **OpenAI 兼容**(Whisper / gpt-4o-transcribe 等)
+  - **OpenRouter**(聚合多家语音转写模型)
+- 🌊 **桌面悬浮指示器** —— 录音时屏幕底部中央出现波形小药丸;当你正停留在 EchoLink 主窗口时自动隐藏(主界面已有波形条)。
+- 📊 **看板与历史** —— 统计口述字数 / 时长 / 速度,保留历史转录记录。
+- 🔔 **托盘常驻 + 单实例** —— 关闭窗口后仍在系统托盘运行,点击托盘图标恢复;重复启动只会激活已有窗口,不会开新进程。
 
-## 本地开发（仅前端，无需 Rust）
+## 安装
 
-```bash
-# 安装依赖
-npm install
+从 [Releases](https://github.com/stupidloud/echolink/releases) 下载对应系统的安装包:
 
-# 启动前端开发服务器（端口 3000）
-npm run dev
+- **Windows**:`.msi` 或 `.exe`(NSIS 安装器)
+- **macOS**:`.dmg`
 
-# 构建前端产物（用于预览 / 提交 CI）
-npm run build
-```
+首次运行需授予权限:
 
-> 注意：本地**不安装** Rust 工具链。`tauri dev` / `tauri build` 等命令由 CI 执行。
+- **麦克风**(录音必需)。
+- **macOS 额外需要**:在「系统设置 → 隐私与安全性 → 辅助功能」里勾选 EchoLink,否则无法把文字输入到其他应用。
 
-## 项目结构
+## 快速上手
 
-```
-echolink/
-├── src/                    # Vue 前端
-│   ├── App.vue
-│   ├── main.js
-│   ├── router.js
-│   └── views/
-│       ├── Dashboard.vue      # 首页看板
-│       ├── ApiSettings.vue    # API 服务器设置
-│       └── History.vue        # 历史记录
-├── src-tauri/              # Tauri / Rust 后端（CI 编译）
-│   ├── tauri.conf.json
-│   └── src/
-├── index.html
-├── package.json
-└── vite.config.js
-```
+1. 打开 EchoLink,进入左侧 **API 服务器设置**。
+2. 选择**协议类型**,填入 **接口地址 / API Key / 模型**,点「测试连接」确认可用后「保存」。
+3. 切到任意应用,把光标放进输入框,**按住 Right Alt 说话,松开** —— 文字就出现了。
 
-## 页面说明
+## 协议怎么填
 
-- `/dashboard` — 首页看板（默认）
-- `/api-settings` — API 服务器设置
-- `/history` — 历史记录
+| 协议 | 接口地址示例 | 模型示例 |
+|---|---|---|
+| StepFun SSE(默认) | `https://api.stepfun.com` | `stepaudio-2.5-asr` |
+| OpenAI 兼容 | `https://api.openai.com/v1` | `gpt-4o-transcribe`、`whisper-1` |
+| OpenRouter | `https://openrouter.ai/api/v1` | `openai/gpt-4o-transcribe` |
 
-## CI 编译
+API Key 到对应平台申请。模型框可直接输入或从下拉里选。
 
-- 平台：Linux (AppImage) / macOS (dmg) / Windows (msi)
-- 触发：push 到 `main` 分支 + PR
-- 工作流：`.github/workflows/build.yml`
-- 产物：Actions Artifacts（暂不自动发布 Release）
+## 常见问题
 
-## 设计风格
+- **按住 Right Alt 没反应?** 确认已授予麦克风权限;macOS 还需在「辅助功能」里勾选 EchoLink。
+- **转写结果为空?** 到「API 服务器设置」点「测试连接」,确认 Key 有效、模型在可用列表中。
+- **关掉窗口后程序还在?** 这是设计 —— 程序驻留系统托盘。点击托盘图标恢复窗口,托盘菜单「退出」可彻底关闭。
+- **Win 键 / 开始菜单受影响?** 不会;EchoLink 只拦截 Alt 触发的窗口菜单,Win 键正常使用。
 
-- **配色**：羊皮纸金 (Parchment Gold)
-- **字体**：Newsreader (标题) + Inter (正文) + IBM Plex Mono (说明)
-- **圆角**：基础圆角
-- **阴影**：轻柔提升
+## 隐私
+
+录音只在你按住 Right Alt 时进行,音频发送到**你自己配置的**识别服务。转录历史保存在本机数据库,不会上传。
+
+---
+
+> 从源码构建、技术栈与开发说明:见 `AGENTS.md` 与项目的 GitHub Actions 工作流(`.github/workflows/build.yml`)。

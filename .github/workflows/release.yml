@@ -1,0 +1,56 @@
+name: Release
+
+# Push a tag like v0.2.0 to build every platform and publish a (draft) GitHub
+# Release with the installers attached. Keep the tag in sync with the version in
+# src-tauri/tauri.conf.json and src-tauri/Cargo.toml.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, macos-15-intel, windows-latest, windows-11-arm]
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Frontend tests
+        run: npm test
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'src-tauri'
+
+      - name: Install Tauri CLI
+        run: npm install -D @tauri-apps/cli@latest
+
+      - name: Build and publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'EchoLink ${{ github.ref_name }}'
+          releaseDraft: true
+          prerelease: false
