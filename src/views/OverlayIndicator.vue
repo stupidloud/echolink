@@ -1,5 +1,5 @@
 <template>
-  <div class="overlay" :class="{ recording: isRecording }">
+  <div v-show="isRecording" class="overlay recording">
     <div class="waveform">
       <span v-for="(h, i) in barHeights" :key="i" class="bar" :style="{ height: h + 'px' }"></span>
     </div>
@@ -11,7 +11,6 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, emit } from '@tauri-apps/api/event'
-import { getCurrentWindow } from '@tauri-apps/api/window'
 
 // This overlay window owns the whole capture + transcription pipeline, so it
 // keeps working while the main window is closed/destroyed. It is created once at
@@ -45,11 +44,10 @@ onMounted(async () => {
         barHeights.value = [4, 4, 4, 4, 4]
         await startRecording()
       } else {
+        // The pill hides via v-show the moment isRecording flips to false; the
+        // window itself stays shown (never suspended) while transcription runs.
         await stopRecording() // capture + transcribe + inject; awaited fully
         barHeights.value = [8, 8, 8, 8, 8]
-        // We hide ourselves only after transcription finished, so the window
-        // stays visible/unthrottled while the work runs.
-        try { await getCurrentWindow().hide() } catch {}
       }
     })
   } catch {}
@@ -115,9 +113,9 @@ async function startRecording() {
     })
     const protocol = settings.protocol || 'openai'
     if (protocol === 'stepfun') {
-      startPcmRecording(currentStream)
+      await startPcmRecording(currentStream)
     } else {
-      startWebmRecording(currentStream)
+      await startWebmRecording(currentStream)
     }
   } catch (e) {
     console.error('[overlay] getUserMedia FAILED:', e)
@@ -127,19 +125,21 @@ async function startRecording() {
   }
 }
 
-function startWebmRecording(stream) {
+async function startWebmRecording(stream) {
   audioChunks = []
   mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' })
   mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data) }
   mediaRecorder.start(200)
   audioContext = new AudioContext({ sampleRate: 16000 })
+  try { await audioContext.resume() } catch {}
   sourceNode = audioContext.createMediaStreamSource(stream)
   startLevelMonitor(audioContext, sourceNode)
 }
 
-function startPcmRecording(stream) {
+async function startPcmRecording(stream) {
   pcmChunks.length = 0
   audioContext = new AudioContext({ sampleRate: 16000 })
+  try { await audioContext.resume() } catch {}
   sourceNode = audioContext.createMediaStreamSource(stream)
   scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1)
   gainNode = audioContext.createGain()

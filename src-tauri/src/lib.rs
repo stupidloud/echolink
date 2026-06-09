@@ -202,9 +202,10 @@ pub fn run() {
                             if !alt_down {
                                 alt_down = true;
                                 log::info!("AltGr pressed");
-                                if let Some(ov) = cb_handle.get_webview_window("overlay") {
-                                    let _ = ov.show();
-                                }
+                                // The overlay window stays shown at all times (it
+                                // owns the pipeline and a hidden webview drops
+                                // events / suspends). It reveals/hides its pill via
+                                // CSS off recording-state, not window show/hide.
                                 let _ = cb_handle.emit("recording-state", true);
                             }
                         }
@@ -212,9 +213,6 @@ pub fn run() {
                             if alt_down {
                                 alt_down = false;
                                 log::info!("AltGr released");
-                                // The overlay owns the pipeline now and hides
-                                // itself once transcription finishes, so it stays
-                                // visible/unthrottled while the work runs.
                                 let _ = cb_handle.emit("recording-state", false);
                             }
                         }
@@ -293,7 +291,11 @@ pub fn run() {
                 let y = mpos.y + msize.height as i32 - win_h - margin;
                 let _ = _overlay.set_position(tauri::PhysicalPosition::new(x, y));
             }
-            let _ = _overlay.hide();
+            // Stay shown (never hidden) so the webview is never suspended and
+            // always receives recording-state. It is transparent + click-through,
+            // so when its pill is not rendered it is invisible and never blocks
+            // clicks on apps underneath.
+            let _ = _overlay.set_ignore_cursor_events(true);
 
             Ok(())
         })
