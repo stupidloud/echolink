@@ -187,7 +187,18 @@ pub fn run() {
 
             #[cfg(target_os = "windows")]
             {
-                let _ = prevent_alt_win_menu::start(Default::default())
+                use prevent_alt_win_menu::event_handler::{Config, MenuTrigger, MenuTriggerEvent};
+                use windows::Win32::UI::Input::KeyboardAndMouse::VK__none_;
+                // Only suppress the Alt window menu (Right Alt is our push-to-talk
+                // key). Leave the Win key alone so the Start menu still opens --
+                // the default config suppressed both.
+                let config: Config = Config::default().set_on_released(|hold| {
+                    match hold.press.menu_trigger() {
+                        Some(MenuTrigger::Alt) => Some(VK__none_),
+                        _ => None,
+                    }
+                });
+                let _ = prevent_alt_win_menu::start(config)
                     .map_err(|e| log::error!("prevent-alt-win-menu: {:?}", e));
             }
 
