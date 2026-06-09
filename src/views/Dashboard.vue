@@ -179,14 +179,16 @@ function startLevelMonitor(ctx, source) {
   source.connect(analyserNode)
   const dataArray = new Uint8Array(analyserNode.frequencyBinCount)
   let frameCount = 0
+  let smoothLevel = 0
   function tick() {
     analyserNode.getByteFrequencyData(dataArray)
     let sum = 0
     for (let i = 0; i < dataArray.length; i++) sum += dataArray[i]
-    const avg = sum / dataArray.length / 255
-    if (frameCount % 50 === 0) console.log('[audio-level]', avg.toFixed(3))
+    const raw = sum / dataArray.length / 255
+    smoothLevel = smoothLevel * 0.85 + raw * 0.15
+    if (frameCount % 50 === 0) console.log('[audio-level]', raw.toFixed(3), '→', smoothLevel.toFixed(3))
     frameCount++
-    emit('audio-level', avg)
+    emit('audio-level', smoothLevel)
     levelRafId = requestAnimationFrame(tick)
   }
   tick()

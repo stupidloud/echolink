@@ -79,9 +79,12 @@ const statusText = computed(() => {
     try {
       unlistenLevel = await listen('audio-level', (event) => {
         const level = event.payload
-        barHeights.value = Array.from({ length: 5 }, () =>
-          Math.max(4, Math.min(24, 4 + level * 40 + Math.random() * 8))
-        )
+        const heights = [4, 4, 4, 4, 4]
+        for (let i = 0; i < 5; i++) {
+          const factor = 1 + Math.sin(i * 1.2) * 0.3
+          heights[i] = Math.max(4, Math.min(24, 4 + level * 32 * factor))
+        }
+        barHeights.value = heights
       })
     } catch {
       // browser fallback
@@ -277,7 +280,7 @@ body {
   height: 8px;
   background: #C8B496;
   border-radius: 2px;
-  transition: height 0.08s ease-out;
+  transition: height 0.12s ease-out;
 }
 
 .recording .bar {
