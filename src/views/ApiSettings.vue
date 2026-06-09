@@ -7,6 +7,7 @@
           <select v-model="form.protocol" class="form-select">
             <option value="stepfun">StepFun SSE（流式，推荐）</option>
             <option value="openai">OpenAI 兼容（HTTP 单次）</option>
+            <option value="openrouter">OpenRouter（JSON base64）</option>
           </select>
           <ChevronDown class="select-icon" />
         </div>
@@ -81,6 +82,7 @@ const testing = ref(false)
 const modelOptions = {
   stepfun: ['stepaudio-2.5-asr', 'stepaudio-2-asr-pro'],
   openai: ['gpt-4o-mini-transcribe', 'gpt-4o-transcribe', 'whisper-1'],
+  openrouter: ['openai/whisper-1', 'openai/gpt-4o-mini-transcribe'],
 }
 
 const defaultForm = {

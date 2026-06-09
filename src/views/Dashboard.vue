@@ -309,9 +309,11 @@ async function handleTranscribeWebM() {
     const blob = new Blob(audioChunks, { type: 'audio/webm' })
     const base64 = await fileToBase64(blob)
     const settings = await invoke('get_settings')
-    console.log('[api] transcribe_audio start → size:', (base64.length * 0.75).toFixed(0), 'bytes, model:', settings.model)
-    const text = await invoke('transcribe_audio', { audioB64: base64, settings })
-    console.log('[api] transcribe_audio done →', text.length, 'chars')
+    const protocol = settings.protocol || 'openai'
+    const cmd = protocol === 'openrouter' ? 'transcribe_audio_openrouter' : 'transcribe_audio'
+    console.log(`[api] ${cmd} start → size:`, (base64.length * 0.75).toFixed(0), 'bytes, model:', settings.model)
+    const text = await invoke(cmd, { audioB64: base64, settings })
+    console.log(`[api] ${cmd} done →`, text.length, 'chars')
     transcript.value = text
     await invoke('insert_history', { text, protocol: settings.protocol || 'openai', target_app: '当前应用' })
     await invoke('inject_text', { text })
