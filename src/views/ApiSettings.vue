@@ -43,10 +43,17 @@
 
       <div class="form-group">
         <label class="form-label">模型名称 (Model)</label>
-        <div class="input-wrapper select-wrapper">
-          <select v-model="form.model" class="form-select">
-            <option v-for="m in currentModels" :key="m" :value="m">{{ m }}</option>
-          </select>
+        <div class="input-wrapper">
+          <input
+            v-model="form.model"
+            type="text"
+            list="model-options"
+            class="form-input"
+            placeholder="输入或选择模型 ID"
+          />
+          <datalist id="model-options">
+            <option v-for="m in currentModels" :key="m" :value="m" />
+          </datalist>
           <ChevronDown class="select-icon" />
         </div>
       </div>
@@ -230,6 +237,9 @@ async function save() {
   color: #1A1A1A;
   cursor: pointer;
   padding: 0;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
 }
 
 .select-value {

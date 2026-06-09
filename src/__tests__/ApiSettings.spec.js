@@ -59,25 +59,24 @@ describe('ApiSettings', () => {
   it('renders model options from currentModels', async () => {
     const wrapper = mount(ApiSettings)
     await new Promise(r => setTimeout(r, 10))
-    const modelSelect = wrapper.findAll('select.form-select')[1]
-    const options = modelSelect.findAll('option')
-    const texts = options.map(o => o.text())
-    expect(texts).toContain('stepaudio-2.5-asr')
-    expect(texts).toContain('stepaudio-2-asr-pro')
+    const datalist = wrapper.find('datalist#model-options')
+    const options = datalist.findAll('option')
+    const values = options.map(o => o.attributes('value'))
+    expect(values).toContain('stepaudio-2.5-asr')
+    expect(values).toContain('stepaudio-2-asr-pro')
   })
 
   it('updates model options when protocol changes', async () => {
     const wrapper = mount(ApiSettings)
     await new Promise(r => setTimeout(r, 10))
-    const selects = wrapper.findAll('select.form-select')
-    const protocolSelect = selects[0]
-    const modelSelect = selects[1]
+    const protocolSelect = wrapper.find('select.form-select')
 
     await protocolSelect.setValue('openai')
 
-    const options = modelSelect.findAll('option')
-    const texts = options.map(o => o.text())
-    expect(texts).toContain('whisper-1')
-    expect(texts).not.toContain('stepaudio-2.5-asr')
+    const datalist = wrapper.find('datalist#model-options')
+    const options = datalist.findAll('option')
+    const values = options.map(o => o.attributes('value'))
+    expect(values).toContain('whisper-1')
+    expect(values).not.toContain('stepaudio-2.5-asr')
   })
 })
