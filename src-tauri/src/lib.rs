@@ -243,7 +243,7 @@ pub fn run() {
             .always_on_top(true)
             .transparent(true)
             .inner_size(120.0, 40.0)
-            .position(0, 0)
+            .position(0.0, 0.0)
             .build()
             .expect("failed to build overlay window");
             let _ = _overlay.hide();
