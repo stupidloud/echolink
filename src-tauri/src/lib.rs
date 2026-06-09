@@ -136,6 +136,29 @@ mod tests {
     }
 }
 
+// Restore the main window from the tray. The pipeline lives in the overlay, so
+// the main window may have been destroyed (X = close); recreate it if missing.
+fn show_or_create_main(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+    } else {
+        match WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+            .title("Echolink")
+            .inner_size(1280.0, 800.0)
+            .min_inner_size(960.0, 600.0)
+            .resizable(true)
+            .build()
+        {
+            Ok(w) => {
+                let _ = w.set_focus();
+            }
+            Err(e) => log::error!("recreate main window failed: {:?}", e),
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[allow(unused_variables)]
@@ -189,9 +212,9 @@ pub fn run() {
                             if alt_down {
                                 alt_down = false;
                                 log::info!("AltGr released");
-                                if let Some(ov) = cb_handle.get_webview_window("overlay") {
-                                    let _ = ov.hide();
-                                }
+                                // The overlay owns the pipeline now and hides
+                                // itself once transcription finishes, so it stays
+                                // visible/unthrottled while the work runs.
                                 let _ = cb_handle.emit("recording-state", false);
                             }
                         }
@@ -212,10 +235,7 @@ pub fn run() {
                 .icon(app.default_window_icon().unwrap().clone())
                 .on_menu_event(move |app, event| match event.id().as_ref() {
                     "show" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
-                        }
+                        show_or_create_main(app);
                     }
                     "hide" => {
                         if let Some(w) = app.get_webview_window("main") {
@@ -234,11 +254,7 @@ pub fn run() {
                         ..
                     } = event
                     {
-                        let app = tray.app_handle();
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
-                        }
+                        show_or_create_main(tray.app_handle());
                     }
                 })
                 .build(app)

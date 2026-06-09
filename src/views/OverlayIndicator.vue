@@ -9,40 +9,266 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { listen } from '@tauri-apps/api/event'
+import { invoke } from '@tauri-apps/api/core'
+import { listen, emit } from '@tauri-apps/api/event'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+
+// This overlay window owns the whole capture + transcription pipeline, so it
+// keeps working while the main window is closed/destroyed. It is created once at
+// startup and stays alive (hidden between dictations), shown while Right Alt is
+// held. It drives its own waveform locally and pushes results to the main window
+// (if alive) via events.
 
 const isRecording = ref(false)
 const barHeights = ref([8, 8, 8, 8, 8])
 
+let mediaRecorder = null
+let audioChunks = []
+let currentStream = null
+
+let audioContext = null
+let scriptProcessor = null
+let sourceNode = null
+let gainNode = null
+let levelProcessor = null
+let levelGain = null
+const pcmChunks = []
+
 let unlistenRecording = null
-let unlistenLevel = null
 
 onMounted(async () => {
   try {
-    unlistenRecording = await listen('recording-state', (event) => {
+    unlistenRecording = await listen('recording-state', async (event) => {
+      if (event.payload === isRecording.value) return
       isRecording.value = event.payload
-      // Start (and reset) flat; the audio-level feed drives motion from here.
-      barHeights.value = event.payload ? [4, 4, 4, 4, 4] : [8, 8, 8, 8, 8]
-    })
-  } catch {}
-  try {
-    unlistenLevel = await listen('audio-level', (event) => {
-      if (!isRecording.value) return
-      // Noise gate: below the floor the bars stay flat, so silence shows no
-      // motion even while Right Alt is held down.
-      const level = event.payload < 0.04 ? 0 : event.payload
-      barHeights.value = Array.from({ length: 5 }, (_, i) => {
-        const factor = 1 + Math.sin(i * 1.2) * 0.3
-        return Math.max(4, Math.min(24, 4 + level * 32 * factor))
-      })
+      if (event.payload) {
+        barHeights.value = [4, 4, 4, 4, 4]
+        await startRecording()
+      } else {
+        await stopRecording() // capture + transcribe + inject; awaited fully
+        barHeights.value = [8, 8, 8, 8, 8]
+        // We hide ourselves only after transcription finished, so the window
+        // stays visible/unthrottled while the work runs.
+        try { await getCurrentWindow().hide() } catch {}
+      }
     })
   } catch {}
 })
 
 onUnmounted(() => {
   if (unlistenRecording) unlistenRecording()
-  if (unlistenLevel) unlistenLevel()
 })
+
+// ---- waveform (local, audio-thread driven) ----
+function applyLevel(level) {
+  if (!isRecording.value) return
+  // Noise gate: below the floor the bars stay flat, so silence shows no motion
+  // even while Right Alt is held.
+  const l = level < 0.04 ? 0 : level
+  barHeights.value = Array.from({ length: 5 }, (_, i) => {
+    const factor = 1 + Math.sin(i * 1.2) * 0.3
+    return Math.max(4, Math.min(24, 4 + l * 32 * factor))
+  })
+}
+
+function startLevelMonitor(ctx, source) {
+  // Level is computed on the audio thread (ScriptProcessor), not requestAnimation
+  // Frame, so it keeps flowing regardless of window visibility. gain=0 sink
+  // prevents mic feedback.
+  levelProcessor = ctx.createScriptProcessor(2048, 1, 1)
+  levelGain = ctx.createGain()
+  levelGain.gain.value = 0
+  let smoothLevel = 0
+  levelProcessor.onaudioprocess = (e) => {
+    const input = e.inputBuffer.getChannelData(0)
+    let sum = 0
+    for (let i = 0; i < input.length; i++) sum += input[i] * input[i]
+    const rms = Math.sqrt(sum / input.length)
+    smoothLevel = smoothLevel * 0.8 + rms * 0.2
+    const level = Math.min(1, smoothLevel * 4)
+    applyLevel(level)            // local bars
+    emit('audio-level', level)   // main window floating-status (when visible)
+  }
+  source.connect(levelProcessor)
+  levelProcessor.connect(levelGain)
+  levelGain.connect(ctx.destination)
+}
+
+function stopLevelMonitor() {
+  if (levelProcessor) {
+    levelProcessor.onaudioprocess = null
+    try { levelProcessor.disconnect() } catch {}
+    levelProcessor = null
+  }
+  if (levelGain) {
+    try { levelGain.disconnect() } catch {}
+    levelGain = null
+  }
+}
+
+// ---- recording ----
+async function startRecording() {
+  try {
+    const settings = await invoke('get_settings')
+    currentStream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true }
+    })
+    const protocol = settings.protocol || 'openai'
+    if (protocol === 'stepfun') {
+      startPcmRecording(currentStream)
+    } else {
+      startWebmRecording(currentStream)
+    }
+  } catch (e) {
+    console.error('[overlay] getUserMedia FAILED:', e)
+    // The tiny overlay can't reliably show a permission prompt; let the main
+    // window surface the problem instead.
+    try { await emit('mic-denied') } catch {}
+  }
+}
+
+function startWebmRecording(stream) {
+  audioChunks = []
+  mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+  mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data) }
+  mediaRecorder.start(200)
+  audioContext = new AudioContext({ sampleRate: 16000 })
+  sourceNode = audioContext.createMediaStreamSource(stream)
+  startLevelMonitor(audioContext, sourceNode)
+}
+
+function startPcmRecording(stream) {
+  pcmChunks.length = 0
+  audioContext = new AudioContext({ sampleRate: 16000 })
+  sourceNode = audioContext.createMediaStreamSource(stream)
+  scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1)
+  gainNode = audioContext.createGain()
+  gainNode.gain.value = 0
+  scriptProcessor.onaudioprocess = (e) => {
+    const input = e.inputBuffer.getChannelData(0)
+    pcmChunks.push(floatTo16BitPCM(input))
+  }
+  sourceNode.connect(scriptProcessor)
+  scriptProcessor.connect(gainNode)
+  gainNode.connect(audioContext.destination)
+  startLevelMonitor(audioContext, sourceNode)
+}
+
+function stopMediaRecorder() {
+  return new Promise((resolve) => {
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') { resolve(); return }
+    mediaRecorder.onstop = () => resolve()
+    mediaRecorder.stop()
+  })
+}
+
+async function stopRecording() {
+  stopLevelMonitor()
+  const settings = await invoke('get_settings')
+  const protocol = settings.protocol || 'openai'
+
+  if (protocol === 'stepfun') {
+    if (scriptProcessor) { try { scriptProcessor.disconnect() } catch {} scriptProcessor = null }
+    if (gainNode) { try { gainNode.disconnect() } catch {} gainNode = null }
+    if (sourceNode) { try { sourceNode.disconnect() } catch {} sourceNode = null }
+    if (audioContext) { try { await audioContext.close() } catch {} audioContext = null }
+    if (currentStream) { currentStream.getTracks().forEach(t => t.stop()); currentStream = null }
+    await handleTranscribePcm(settings)
+  } else {
+    await stopMediaRecorder()
+    if (audioContext) { try { await audioContext.close() } catch {} audioContext = null }
+    if (sourceNode) { try { sourceNode.disconnect() } catch {} sourceNode = null }
+    if (currentStream) { currentStream.getTracks().forEach(t => t.stop()); currentStream = null }
+    await handleTranscribeWebM(settings)
+  }
+}
+
+// ---- transcription ----
+async function finishTranscript(text, protocol) {
+  if (!text) return
+  try { await invoke('insert_history', { text, protocol, targetApp: '当前应用' }) }
+  catch (e) { console.warn('[overlay] insert_history failed:', e) }
+  try { await invoke('inject_text', { text }) }
+  catch (e) { console.warn('[overlay] inject_text failed:', e) }
+  try { await emit('history-updated') } catch {}
+}
+
+async function handleTranscribeWebM(settings) {
+  try {
+    if (audioChunks.length === 0) return
+    const blob = new Blob(audioChunks, { type: 'audio/webm' })
+    const base64 = await fileToBase64(blob)
+    const protocol = settings.protocol || 'openai'
+    const cmd = protocol === 'openrouter' ? 'transcribe_audio_openrouter' : 'transcribe_audio'
+    const text = await invoke(cmd, { audioB64: base64, settings })
+    await emit('transcript-done', text) // webm has no streaming; push final to main
+    await finishTranscript(text, protocol)
+  } catch (e) {
+    console.warn('[overlay] webm transcribe failed:', e)
+  } finally {
+    audioChunks = []
+  }
+}
+
+async function handleTranscribePcm(settings) {
+  try {
+    if (pcmChunks.length === 0) return
+    const pcmBytes = mergePcmChunks()
+    const base64 = arrayBufferToBase64(pcmBytes.buffer)
+    // The SSE backend streams transcript-delta / transcript-done to all windows
+    // itself, so the main window gets the live text; we only need the final.
+    const text = await invoke('transcribe_audio_sse', { audioB64: base64, settings })
+    await finishTranscript(text, settings.protocol || 'stepfun')
+  } catch (e) {
+    console.warn('[overlay] sse transcribe failed:', e)
+  } finally {
+    pcmChunks.length = 0
+  }
+}
+
+function floatTo16BitPCM(float32Array) {
+  const buffer = new ArrayBuffer(float32Array.length * 2)
+  const view = new DataView(buffer)
+  for (let i = 0; i < float32Array.length; i++) {
+    let s = Math.max(-1, Math.min(1, float32Array[i]))
+    view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true)
+  }
+  return new Uint8Array(buffer)
+}
+
+function mergePcmChunks() {
+  const totalLen = pcmChunks.reduce((sum, c) => sum + c.length, 0)
+  const merged = new Uint8Array(totalLen)
+  let offset = 0
+  for (const chunk of pcmChunks) {
+    merged.set(chunk, offset)
+    offset += chunk.length
+  }
+  return merged
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize)
+    binary += String.fromCharCode.apply(null, chunk)
+  }
+  return btoa(binary)
+}
+
+function fileToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const base64 = reader.result.toString().split(',')[1]
+      resolve(base64)
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
 </script>
 
 <style>

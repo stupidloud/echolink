@@ -44,25 +44,18 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import { listen, emit } from '@tauri-apps/api/event'
+import { listen } from '@tauri-apps/api/event'
+
+// Recording + transcription now live in the overlay window (so they survive the
+// main window being closed/destroyed). The dashboard is a pure display: it
+// reflects recording state and shows transcripts pushed via events, and never
+// touches the microphone itself.
 
 const isRecording = ref(false)
 const transcript = ref('')
 const historyTexts = ref([])
 const recordingDuration = ref(0)
-const recordingTimer = ref(null)
-let mediaRecorder = null
-let audioChunks = []
-let currentStream = null
-const isTranscribing = ref(false)
-
-let audioContext = null
-let scriptProcessor = null
-let sourceNode = null
-let gainNode = null
-let levelProcessor = null
-let levelGain = null
-const pcmChunks = []
+let durTimer = null
 
 const unlistens = []
 
@@ -70,22 +63,28 @@ const totalChars = computed(() => historyTexts.value.reduce((sum, t) => sum + t.
 const totalMinutes = computed(() => Math.max(1, Math.round(totalChars.value / 200)))
 const avgSpeed = computed(() => totalMinutes.value > 0 ? Math.round(totalChars.value / totalMinutes.value) : 0)
 
-onMounted(async () => {
+async function refreshHistory() {
   try {
     historyTexts.value = (await invoke('get_history', { limit: 99999 })).map(r => r.text)
   } catch {
     console.warn('[dashboard] get_history failed')
   }
+}
+
+onMounted(async () => {
+  await refreshHistory()
 
   try {
-    unlistens.push(await listen('recording-state', async (event) => {
-      console.log('[event] recording-state →', event.payload)
-      if (event.payload === isRecording.value) return
+    unlistens.push(await listen('recording-state', (event) => {
       isRecording.value = event.payload
       if (event.payload) {
-        await startRecording()
-      } else {
-        await stopRecording()
+        transcript.value = ''
+        recordingDuration.value = 0
+        if (durTimer) clearInterval(durTimer)
+        durTimer = setInterval(() => { recordingDuration.value += 0.1 }, 100)
+      } else if (durTimer) {
+        clearInterval(durTimer)
+        durTimer = null
       }
     }))
   } catch {
@@ -93,52 +92,27 @@ onMounted(async () => {
   }
 
   try {
-    unlistens.push(await listen('transcript-delta', (e) => {
-      if (isTranscribing.value) {
-        console.log('[event] transcript-delta → +' + e.payload.length + ' chars')
-        transcript.value += e.payload
-      }
-    }))
-  } catch {
-    console.warn('[dashboard] listen transcript-delta failed')
-  }
-
+    unlistens.push(await listen('transcript-delta', (e) => { transcript.value += e.payload }))
+  } catch {}
   try {
-    unlistens.push(await listen('transcript-done', async (e) => {
-      if (!isTranscribing.value) return
-      const text = e.payload
-      console.log('[event] transcript-done → final length:', text.length)
-      transcript.value = text
-      historyTexts.value.push(text)
-      let protocol = 'openai'
-      try {
-        const settings = await invoke('get_settings')
-        protocol = settings.protocol || 'openai'
-      } catch (e) {
-        console.warn('[dashboard] get_settings failed:', e)
-      }
-      try {
-        await invoke('insert_history', { text, protocol, targetApp: '当前应用' })
-      } catch (e) {
-        console.warn('[dashboard] insert_history failed:', e)
-      }
-      try {
-        await invoke('inject_text', { text })
-      } catch (e) {
-        console.warn('[dashboard] inject_text failed:', e)
-      }
-      isTranscribing.value = false
-    }))
-  } catch {
-    console.warn('[dashboard] listen transcript-done failed')
-  }
-
-  // Pre-request mic permission so it doesn't pop mid-recording
+    unlistens.push(await listen('transcript-done', (e) => { transcript.value = e.payload }))
+  } catch {}
   try {
-    const testStream = await navigator.mediaDevices.getUserMedia({
+    unlistens.push(await listen('history-updated', () => { refreshHistory() }))
+  } catch {}
+  try {
+    unlistens.push(await listen('mic-denied', () => {
+      transcript.value = '⚠️ 无法访问麦克风，请在系统设置中授予权限后重试'
+    }))
+  } catch {}
+
+  // Pre-warm mic permission in this large window so the tiny overlay never has
+  // to surface a permission prompt; the same-origin grant is shared + persisted.
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true }
     })
-    testStream.getTracks().forEach(t => t.stop())
+    s.getTracks().forEach(t => t.stop())
     console.log('[mic] permission pre-granted')
   } catch (e) {
     console.warn('[mic] permission denied:', e)
@@ -146,226 +120,9 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  if (durTimer) clearInterval(durTimer)
   for (const un of unlistens) { un() }
 })
-
-function startLevelMonitor(ctx, source) {
-  // Compute the level on the audio thread (ScriptProcessor), NOT via
-  // requestAnimationFrame: rAF is frozen while the main window is hidden, which
-  // is exactly when the overlay needs this feed. The audio thread keeps running
-  // regardless of window visibility. gain=0 sink prevents mic feedback.
-  levelProcessor = ctx.createScriptProcessor(2048, 1, 1)
-  levelGain = ctx.createGain()
-  levelGain.gain.value = 0
-  let smoothLevel = 0
-  levelProcessor.onaudioprocess = (e) => {
-    const input = e.inputBuffer.getChannelData(0)
-    let sum = 0
-    for (let i = 0; i < input.length; i++) sum += input[i] * input[i]
-    const rms = Math.sqrt(sum / input.length)
-    smoothLevel = smoothLevel * 0.8 + rms * 0.2
-    emit('audio-level', Math.min(1, smoothLevel * 4))
-  }
-  source.connect(levelProcessor)
-  levelProcessor.connect(levelGain)
-  levelGain.connect(ctx.destination)
-}
-
-function stopLevelMonitor() {
-  if (levelProcessor) {
-    levelProcessor.onaudioprocess = null
-    try { levelProcessor.disconnect() } catch {}
-    levelProcessor = null
-  }
-  if (levelGain) {
-    try { levelGain.disconnect() } catch {}
-    levelGain = null
-  }
-}
-
-async function startRecording() {
-  try {
-    const settings = await invoke('get_settings')
-    console.log('[mic] startRecording → protocol:', settings.protocol)
-    currentStream = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true }
-    })
-    console.log('[mic] getUserMedia OK, tracks:', currentStream.getAudioTracks().length)
-    const protocol = settings.protocol || 'openai'
-    if (protocol === 'stepfun') {
-      await startPcmRecording(currentStream)
-    } else {
-      await startWebmRecording(currentStream)
-    }
-  } catch (e) {
-    console.error('[mic] getUserMedia FAILED:', e)
-    transcript.value = '⚠️ 无法访问麦克风，请检查权限设置'
-  }
-}
-
-async function startWebmRecording(stream) {
-  audioChunks = []
-  mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' })
-  mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data) }
-  mediaRecorder.onstop = async () => {
-    stopLevelMonitor()
-    stream.getTracks().forEach(t => t.stop())
-    await handleTranscribeWebM()
-  }
-  mediaRecorder.start(200)
-  const ctx = new AudioContext({ sampleRate: 16000 })
-  const src = ctx.createMediaStreamSource(stream)
-  startLevelMonitor(ctx, src)
-  recordingDuration.value = 0
-  recordingTimer.value = setInterval(() => { recordingDuration.value += 0.1 }, 100)
-}
-
-async function startPcmRecording(stream) {
-  pcmChunks.length = 0
-  audioContext = new AudioContext({ sampleRate: 16000 })
-  sourceNode = audioContext.createMediaStreamSource(stream)
-  scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1)
-  gainNode = audioContext.createGain()
-  gainNode.gain.value = 0
-
-  scriptProcessor.onaudioprocess = (e) => {
-    const input = e.inputBuffer.getChannelData(0)
-    const pcm = floatTo16BitPCM(input)
-    pcmChunks.push(pcm)
-  }
-  sourceNode.connect(scriptProcessor)
-  scriptProcessor.connect(gainNode)
-  gainNode.connect(audioContext.destination)
-  startLevelMonitor(audioContext, sourceNode)
-  recordingDuration.value = 0
-  recordingTimer.value = setInterval(() => { recordingDuration.value += 0.1 }, 100)
-}
-
-function floatTo16BitPCM(float32Array) {
-  const buffer = new ArrayBuffer(float32Array.length * 2)
-  const view = new DataView(buffer)
-  for (let i = 0; i < float32Array.length; i++) {
-    let s = Math.max(-1, Math.min(1, float32Array[i]))
-    view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true)
-  }
-  return new Uint8Array(buffer)
-}
-
-function mergePcmChunks() {
-  const totalLen = pcmChunks.reduce((sum, c) => sum + c.length, 0)
-  const merged = new Uint8Array(totalLen)
-  let offset = 0
-  for (const chunk of pcmChunks) {
-    merged.set(chunk, offset)
-    offset += chunk.length
-  }
-  return merged
-}
-
-async function stopRecording() {
-  if (recordingTimer.value) {
-    clearInterval(recordingTimer.value)
-    recordingTimer.value = null
-  }
-  stopLevelMonitor()
-  const settings = await invoke('get_settings')
-  const protocol = settings.protocol || 'openai'
-  console.log('[mic] stopRecording → protocol:', protocol)
-
-  if (protocol === 'stepfun') {
-    if (gainNode) {
-      try { gainNode.disconnect() } catch {}
-      gainNode = null
-    }
-    if (scriptProcessor) {
-      try { scriptProcessor.disconnect() } catch {}
-      scriptProcessor = null
-    }
-    if (sourceNode) {
-      try { sourceNode.disconnect() } catch {}
-      sourceNode = null
-    }
-    if (audioContext) {
-      try { await audioContext.close() } catch {}
-      audioContext = null
-    }
-    if (currentStream) {
-      currentStream.getTracks().forEach(t => t.stop())
-      currentStream = null
-    }
-    await handleTranscribePcm()
-  } else {
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      mediaRecorder.stop()
-    }
-    if (currentStream) {
-      currentStream.getTracks().forEach(t => t.stop())
-      currentStream = null
-    }
-  }
-}
-
-async function handleTranscribeWebM() {
-  try {
-    if (audioChunks.length === 0) return
-    const blob = new Blob(audioChunks, { type: 'audio/webm' })
-    const base64 = await fileToBase64(blob)
-    const settings = await invoke('get_settings')
-    const protocol = settings.protocol || 'openai'
-    const cmd = protocol === 'openrouter' ? 'transcribe_audio_openrouter' : 'transcribe_audio'
-    console.log(`[api] ${cmd} start → size:`, (base64.length * 0.75).toFixed(0), 'bytes, model:', settings.model)
-    const text = await invoke(cmd, { audioB64: base64, settings })
-    console.log(`[api] ${cmd} done →`, text.length, 'chars')
-    transcript.value = text
-    await invoke('insert_history', { text, protocol: settings.protocol || 'openai', target_app: '当前应用' })
-    await invoke('inject_text', { text })
-  } catch (e) {
-    console.warn('[api] transcribe_audio failed:', e)
-  } finally {
-    audioChunks = []
-  }
-}
-
-async function handleTranscribePcm() {
-  try {
-    if (pcmChunks.length === 0) return
-    const pcmBytes = mergePcmChunks()
-    const base64 = arrayBufferToBase64(pcmBytes.buffer)
-    const settings = await invoke('get_settings')
-    console.log('[api] transcribe_audio_sse start → size:', pcmBytes.length, 'bytes, model:', settings.model)
-    isTranscribing.value = true
-    transcript.value = ''
-    await invoke('transcribe_audio_sse', { audioB64: base64, settings })
-  } catch (e) {
-    console.warn('[api] transcribe_audio_sse failed:', e)
-    isTranscribing.value = false
-  } finally {
-    pcmChunks.length = 0
-  }
-}
-
-function arrayBufferToBase64(buffer) {
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
-  const chunkSize = 0x8000
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, i + chunkSize)
-    binary += String.fromCharCode.apply(null, chunk)
-  }
-  return btoa(binary)
-}
-
-function fileToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      const base64 = reader.result.toString().split(',')[1]
-      resolve(base64)
-    }
-    reader.onerror = reject
-    reader.readAsDataURL(blob)
-  })
-}
 </script>
 
 <style scoped>
