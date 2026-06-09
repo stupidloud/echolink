@@ -60,8 +60,8 @@ let audioContext = null
 let scriptProcessor = null
 let sourceNode = null
 let gainNode = null
-let analyserNode = null
-let levelRafId = null
+let levelProcessor = null
+let levelGain = null
 const pcmChunks = []
 
 const unlistens = []
@@ -150,34 +150,36 @@ onUnmounted(() => {
 })
 
 function startLevelMonitor(ctx, source) {
-  analyserNode = ctx.createAnalyser()
-  analyserNode.fftSize = 256
-  source.connect(analyserNode)
-  const dataArray = new Uint8Array(analyserNode.frequencyBinCount)
-  let frameCount = 0
+  // Compute the level on the audio thread (ScriptProcessor), NOT via
+  // requestAnimationFrame: rAF is frozen while the main window is hidden, which
+  // is exactly when the overlay needs this feed. The audio thread keeps running
+  // regardless of window visibility. gain=0 sink prevents mic feedback.
+  levelProcessor = ctx.createScriptProcessor(2048, 1, 1)
+  levelGain = ctx.createGain()
+  levelGain.gain.value = 0
   let smoothLevel = 0
-  function tick() {
-    analyserNode.getByteFrequencyData(dataArray)
+  levelProcessor.onaudioprocess = (e) => {
+    const input = e.inputBuffer.getChannelData(0)
     let sum = 0
-    for (let i = 0; i < dataArray.length; i++) sum += dataArray[i]
-    const raw = sum / dataArray.length / 255
-    smoothLevel = smoothLevel * 0.85 + raw * 0.15
-    if (frameCount % 50 === 0) console.log('[audio-level]', raw.toFixed(3), '→', smoothLevel.toFixed(3))
-    frameCount++
-    emit('audio-level', smoothLevel)
-    levelRafId = requestAnimationFrame(tick)
+    for (let i = 0; i < input.length; i++) sum += input[i] * input[i]
+    const rms = Math.sqrt(sum / input.length)
+    smoothLevel = smoothLevel * 0.8 + rms * 0.2
+    emit('audio-level', Math.min(1, smoothLevel * 4))
   }
-  tick()
+  source.connect(levelProcessor)
+  levelProcessor.connect(levelGain)
+  levelGain.connect(ctx.destination)
 }
 
 function stopLevelMonitor() {
-  if (levelRafId != null) {
-    cancelAnimationFrame(levelRafId)
-    levelRafId = null
+  if (levelProcessor) {
+    levelProcessor.onaudioprocess = null
+    try { levelProcessor.disconnect() } catch {}
+    levelProcessor = null
   }
-  if (analyserNode) {
-    try { analyserNode.disconnect() } catch {}
-    analyserNode = null
+  if (levelGain) {
+    try { levelGain.disconnect() } catch {}
+    levelGain = null
   }
 }
 
