@@ -88,6 +88,18 @@ mod tests {
     }
 
     #[test]
+    fn api_url_preserves_query_string() {
+        let url = api_url(
+            "https://openrouter.ai/api/v1",
+            "/v1/models?output_modalities=transcription",
+        );
+        assert_eq!(
+            url,
+            "https://openrouter.ai/api/v1/models?output_modalities=transcription"
+        );
+    }
+
+    #[test]
     fn app_settings_defaults() {
         let s = AppSettings::default();
         assert_eq!(s.base_url, "https://api.stepfun.com");
@@ -241,11 +253,11 @@ pub fn run() {
             .title("")
             .decorations(false)
             .always_on_top(true)
+            .transparent(true)
             .inner_size(120.0, 40.0)
             .position(0.0, 0.0)
             .build()
             .expect("failed to build overlay window");
-            let _ = _overlay.set_background_color(Some(tauri::webview::Color(0, 0, 0, 0)));
             let _ = _overlay.hide();
 
             Ok(())
@@ -257,6 +269,7 @@ pub fn run() {
             insert_history,
             delete_history,
             transcribe_audio,
+            transcribe_audio_openrouter,
             transcribe_audio_sse,
             verify_connection,
             inject_text,
@@ -413,6 +426,65 @@ async fn transcribe_audio(audio_b64: String, settings: AppSettings) -> Result<St
     let text: String = resp.text().await.map_err(|e| e.to_string())?;
     log::info!("transcribe_audio → OK, len={}", text.len());
     Ok(text)
+}
+
+#[derive(serde::Serialize)]
+struct OpenRouterAudio {
+    data: String,
+    format: String,
+}
+
+#[derive(serde::Serialize)]
+struct OpenRouterAsrRequest {
+    model: String,
+    input_audio: OpenRouterAudio,
+}
+
+#[derive(serde::Deserialize)]
+struct OpenRouterAsrResponse {
+    text: String,
+}
+
+#[tauri::command]
+async fn transcribe_audio_openrouter(
+    audio_b64: String,
+    settings: AppSettings,
+) -> Result<String, String> {
+    let client = reqwest::Client::new();
+    let url = api_url(&settings.base_url, "/v1/audio/transcriptions");
+    log::info!(
+        "transcribe_audio_openrouter → url={}, audio_b64_len={}",
+        url,
+        audio_b64.len()
+    );
+
+    let body = OpenRouterAsrRequest {
+        model: settings.model.clone(),
+        input_audio: OpenRouterAudio {
+            data: audio_b64,
+            format: "webm".to_string(),
+        },
+    };
+
+    let resp = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", settings.api_key))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let err_body = resp.text().await.unwrap_or_default();
+        log::error!("transcribe_audio_openrouter HTTP {} → {}", status, err_body);
+        return Err(format!("ASR error: {} {}", status, err_body));
+    }
+
+    let parsed: OpenRouterAsrResponse = resp.json().await.map_err(|e| e.to_string())?;
+    log::info!("transcribe_audio_openrouter → OK, len={}", parsed.text.len());
+    Ok(parsed.text)
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -681,7 +753,14 @@ fn get_app_version() -> String {
 #[tauri::command]
 async fn verify_connection(settings: AppSettings) -> Result<String, String> {
     let client = reqwest::Client::new();
-    let url = api_url(&settings.base_url, "/v1/models");
+    // OpenRouter only lists STT models behind the transcription modality filter;
+    // the unfiltered /v1/models returns chat models and never contains the ASR id.
+    let path = if settings.protocol == "openrouter" {
+        "/v1/models?output_modalities=transcription"
+    } else {
+        "/v1/models"
+    };
+    let url = api_url(&settings.base_url, path);
     log::info!("verify_connection → url={}, protocol={}", url, settings.protocol);
 
     let resp = client
