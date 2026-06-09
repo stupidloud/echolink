@@ -92,30 +92,6 @@ onMounted(async () => {
     console.warn('[dashboard] listen recording-state failed')
   }
 
-  // Frontend key handler: catches AltGr when Echolink has focus
-  const onKey = async (e) => {
-    if (e.code === 'AltRight' || e.key === 'AltGraph') {
-      e.preventDefault()
-      if (e.type === 'keydown' && !isRecording.value) {
-        console.log('[key] AltGr down (focused)')
-        isRecording.value = true
-        emit('recording-state', true)
-        await startRecording()
-      } else if (e.type === 'keyup' && isRecording.value) {
-        console.log('[key] AltGr up (focused)')
-        isRecording.value = false
-        emit('recording-state', false)
-        await stopRecording()
-      }
-    }
-  }
-  window.addEventListener('keydown', onKey)
-  window.addEventListener('keyup', onKey)
-  unlistens.push(() => {
-    window.removeEventListener('keydown', onKey)
-    window.removeEventListener('keyup', onKey)
-  })
-
   try {
     unlistens.push(await listen('transcript-delta', (e) => {
       if (isTranscribing.value) {

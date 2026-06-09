@@ -54,7 +54,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Home, History, Server, Settings, HelpCircle } from 'lucide-vue-next'
-import { listen } from '@tauri-apps/api/event'
+import { listen, emit } from '@tauri-apps/api/event'
 
 const isRecording = ref(false)
 const barHeights = ref([8, 8, 8, 8, 8])
@@ -66,6 +66,7 @@ const statusText = computed(() => {
 
   let unlisten = null
   let unlistenLevel = null
+  let unlistenKeys = null
 
   onMounted(async () => {
     try {
@@ -89,11 +90,32 @@ const statusText = computed(() => {
     } catch {
       // browser fallback
     }
+
+    // Global key handler: catches AltGr on all pages when focused
+    const onKey = async (e) => {
+      if (e.code === 'AltRight' || e.key === 'AltGraph') {
+        e.preventDefault()
+        if (e.type === 'keydown' && !isRecording.value) {
+          isRecording.value = true
+          emit('recording-state', true)
+        } else if (e.type === 'keyup' && isRecording.value) {
+          isRecording.value = false
+          emit('recording-state', false)
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('keyup', onKey)
+    unlistenKeys = () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keyup', onKey)
+    }
   })
 
   onUnmounted(() => {
     unlisten?.()
     unlistenLevel?.()
+    unlistenKeys?.()
   })
 </script>
 
@@ -112,9 +134,10 @@ body {
 
 .app-container {
   display: flex;
-  width: 1280px;
-  height: 800px;
-  margin: 0 auto;
+  width: 100vw;
+  height: 100vh;
+  min-width: 960px;
+  min-height: 600px;
   background: #F4F2EF;
   position: relative;
 }
