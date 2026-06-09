@@ -245,7 +245,7 @@ pub fn run() {
             .position(0.0, 0.0)
             .build()
             .expect("failed to build overlay window");
-            let _ = _overlay.set_background_color(Some(tauri::window::Color { r: 0, g: 0, b: 0, a: 0 }));
+            let _ = _overlay.set_background_color(Some(tauri::webview::Color(0, 0, 0, 0)));
             let _ = _overlay.hide();
 
             Ok(())
