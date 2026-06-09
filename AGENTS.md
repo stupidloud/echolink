@@ -9,3 +9,7 @@
 - Set repo public BEFORE pushing.
 - Wait for CI jobs to actually start (steps > 0) before switching back to private.
 - Never cancel a running CI unless user asks.
+
+## Proposal Before Change
+- Always propose the solution first and wait for user approval before implementing.
+- Describe what files change and the approach, not just the goal.

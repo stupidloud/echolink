@@ -2,7 +2,7 @@ use std::sync::Mutex;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter, Manager,
+    Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
 };
 use tauri_plugin_store::StoreExt;
 
@@ -167,6 +167,9 @@ pub fn run() {
                             if !alt_down {
                                 alt_down = true;
                                 log::info!("AltGr pressed");
+                                if let Some(ov) = cb_handle.get_webview_window("overlay") {
+                                    let _ = ov.show();
+                                }
                                 let _ = cb_handle.emit("recording-state", true);
                             }
                         }
@@ -174,6 +177,9 @@ pub fn run() {
                             if alt_down {
                                 alt_down = false;
                                 log::info!("AltGr released");
+                                if let Some(ov) = cb_handle.get_webview_window("overlay") {
+                                    let _ = ov.hide();
+                                }
                                 let _ = cb_handle.emit("recording-state", false);
                             }
                         }
@@ -226,10 +232,22 @@ pub fn run() {
                 .build(app)
                 .expect("failed to build tray icon");
 
-            // Start minimized to tray
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.hide();
-            }
+            // Overlay recording indicator window
+            let _overlay = WebviewWindowBuilder::new(
+                app,
+                "overlay",
+                WebviewUrl::App("index.html#/overlay".into()),
+            )
+            .title("")
+            .decorations(false)
+            .transparent(true)
+            .always_on_top(true)
+            .width(120)
+            .height(40)
+            .position(0, 0)
+            .build()
+            .expect("failed to build overlay window");
+            let _ = _overlay.hide();
 
             Ok(())
         })
