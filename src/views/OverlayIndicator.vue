@@ -40,7 +40,7 @@ onMounted(async () => {
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-  background: transparent;
+  background: #1A1A1A;
   overflow: hidden;
   display: flex;
   align-items: center;

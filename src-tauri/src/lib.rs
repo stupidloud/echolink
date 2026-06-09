@@ -240,7 +240,6 @@ pub fn run() {
             )
             .title("")
             .decorations(false)
-            .transparent(true)
             .always_on_top(true)
             .width(120)
             .height(40)
