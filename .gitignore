@@ -15,3 +15,6 @@ Thumbs.db
 
 # Tauri
 src-tauri/gen/
+
+# CodeGraph local index
+.codegraph/

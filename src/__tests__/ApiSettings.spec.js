@@ -14,7 +14,7 @@ describe('ApiSettings', () => {
       if (cmd === 'get_settings') {
         return { protocol: 'stepfun', baseUrl: 'https://api.stepfun.com', apiKey: '', model: 'stepaudio-2.5-asr' }
       }
-      if (cmd === 'verify_connection') return 'OK'
+      if (cmd === 'verify_connection') return { ok: true, code: 'modelAvailable', model: 'stepaudio-2.5-asr' }
       return null
     })
   })

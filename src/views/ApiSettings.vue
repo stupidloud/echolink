@@ -2,19 +2,19 @@
   <div class="api-settings">
     <div class="form">
       <div class="form-group">
-        <label class="form-label">协议类型 (Protocol)</label>
+        <label class="form-label">{{ $t('api.protocolLabel') }}</label>
         <div class="input-wrapper select-wrapper">
           <select v-model="form.protocol" class="form-select">
-            <option value="stepfun">StepFun SSE（流式，推荐）</option>
-            <option value="openai">OpenAI 兼容（HTTP 单次）</option>
-            <option value="openrouter">OpenRouter（JSON base64）</option>
+            <option value="stepfun">{{ $t('api.optStepfun') }}</option>
+            <option value="openai">{{ $t('api.optOpenai') }}</option>
+            <option value="openrouter">{{ $t('api.optOpenrouter') }}</option>
           </select>
           <ChevronDown class="select-icon" />
         </div>
       </div>
 
       <div class="form-group">
-        <label class="form-label">接口基础地址 (Base URL)</label>
+        <label class="form-label">{{ $t('api.baseUrlLabel') }}</label>
         <div class="input-wrapper">
           <input
             v-model="form.baseUrl"
@@ -22,12 +22,12 @@
             class="form-input"
             placeholder="https://api.stepfun.com/v1"
           />
-          <span class="input-hint">可输入到 /v1 层级，如 https://api.stepfun.com/v1</span>
+          <span class="input-hint">{{ $t('api.baseUrlHint') }}</span>
         </div>
       </div>
 
       <div class="form-group">
-        <label class="form-label">鉴权密钥 (API Key)</label>
+        <label class="form-label">{{ $t('api.apiKeyLabel') }}</label>
         <div class="input-wrapper">
           <input
             v-model="form.apiKey"
@@ -43,13 +43,13 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label">模型名称 (Model)</label>
+        <label class="form-label">{{ $t('api.modelLabel') }}</label>
         <div ref="comboRef" class="input-wrapper model-combo">
           <input
             v-model="form.model"
             type="text"
             class="form-input"
-            placeholder="输入或选择模型 ID"
+            :placeholder="$t('api.modelPlaceholder')"
             @focus="showModels = true"
           />
           <ChevronDown class="select-icon combo-toggle" @click="showModels = !showModels" />
@@ -67,8 +67,8 @@
     </div>
 
     <div class="actions">
-      <button class="test-btn" @click="test" :disabled="testing">{{ testing ? '测试中...' : '测试连接' }}</button>
-      <button class="save-btn" @click="save" :disabled="testing">保存设置</button>
+      <button class="test-btn" @click="test" :disabled="testing">{{ testing ? $t('api.testing') : $t('api.test') }}</button>
+      <button class="save-btn" @click="save" :disabled="testing">{{ $t('api.save') }}</button>
     </div>
 
     <p v-if="msg" class="result-msg" :class="msgType">{{ msg }}</p>
@@ -77,8 +77,11 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { Eye, ChevronDown } from 'lucide-vue-next'
+
+const { t } = useI18n()
 
 const showKey = ref(false)
 const msg = ref('')
@@ -145,18 +148,18 @@ onUnmounted(() => {
 })
 
 async function test() {
-  msg.value = '正在测试连接...'
+  msg.value = t('api.testingMsg')
   msgType.value = ''
   testing.value = true
   console.log('[api] test connection →', form.value.baseUrl, form.value.model)
   try {
-    const result = await invoke('verify_connection', { settings: form.value })
-    console.log('[api] verify_connection OK →', result)
-    msg.value = result
-    msgType.value = 'success'
+    const r = await invoke('verify_connection', { settings: form.value })
+    console.log('[api] verify_connection →', r)
+    msg.value = t(`api.verify.${r.code}`, { model: r.model, available: r.available, detail: r.detail })
+    msgType.value = r.ok ? 'success' : 'error'
   } catch (e) {
     console.log('[api] verify_connection FAILED →', e)
-    msg.value = `❌ ${e}`
+    msg.value = t('api.verify.requestFailed', { err: e })
     msgType.value = 'error'
   } finally {
     testing.value = false
@@ -164,18 +167,18 @@ async function test() {
 }
 
 async function save() {
-  msg.value = '正在保存...'
+  msg.value = t('api.savingMsg')
   msgType.value = ''
   testing.value = true
   console.log('[api] save settings →', form.value.protocol, form.value.baseUrl)
   try {
     await invoke('save_settings', { settings: form.value })
     console.log('[api] save OK')
-    msg.value = '✅ 已保存'
+    msg.value = t('api.saved')
     msgType.value = 'success'
   } catch (e) {
     console.log('[api] save FAILED →', e)
-    msg.value = `❌ 保存失败: ${e}`
+    msg.value = t('api.saveFailed', { err: e })
     msgType.value = 'error'
   } finally {
     testing.value = false

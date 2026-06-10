@@ -12,6 +12,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, emit } from '@tauri-apps/api/event'
 import { info, warn, error } from '@tauri-apps/plugin-log'
+import { currentLocale } from '../i18n'
 
 // This overlay window owns the whole capture + transcription pipeline, so it
 // keeps working while the main window is closed/destroyed. It stays shown at all
@@ -218,7 +219,7 @@ async function handleTranscribeWebM(settings) {
     const protocol = settings.protocol || 'openai'
     const cmd = protocol === 'openrouter' ? 'transcribe_audio_openrouter' : 'transcribe_audio'
     info('[ov] ' + cmd + ' start, bytes=' + Math.round(base64.length * 0.75))
-    const text = await invoke(cmd, { audioB64: base64, settings })
+    const text = await invoke(cmd, { audioB64: base64, settings, language: currentLocale() })
     info('[ov] ' + cmd + ' done, len=' + (text ? text.length : 0))
     await emit('transcript-done', text) // webm has no streaming; push final to main
     await finishTranscript(text, protocol)
@@ -237,7 +238,7 @@ async function handleTranscribePcm(settings) {
     info('[ov] transcribe_audio_sse start, bytes=' + pcmBytes.length)
     // The SSE backend streams transcript-delta / transcript-done to all windows
     // itself, so the main window gets the live text; we only need the final.
-    const text = await invoke('transcribe_audio_sse', { audioB64: base64, settings })
+    const text = await invoke('transcribe_audio_sse', { audioB64: base64, settings, language: currentLocale() })
     info('[ov] transcribe_audio_sse done, len=' + (text ? text.length : 0))
     await finishTranscript(text, settings.protocol || 'stepfun')
   } catch (e) {

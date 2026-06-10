@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
+import { i18n } from './i18n'
 
 import { load } from '@tauri-apps/plugin-store'
 import { readText, writeText } from '@tauri-apps/plugin-clipboard-manager'
@@ -10,6 +11,7 @@ import { attachConsole } from '@tauri-apps/plugin-log'
 
 const app = createApp(App)
 app.use(router)
+app.use(i18n)
 
 let unlistenRecording = null
 

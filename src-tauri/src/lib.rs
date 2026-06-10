@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 use tauri::{
-    menu::{MenuBuilder, MenuItemBuilder},
+    menu::{MenuBuilder, MenuItem, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
 };
@@ -9,6 +9,16 @@ use tauri_plugin_store::StoreExt;
 #[derive(Default)]
 struct AppState {
     is_recording: bool,
+}
+
+// Handles to the tray menu items. The frontend i18n is the single source of UI
+// text, so it pushes translated labels here (at startup and on every language
+// switch) via set_tray_labels. Rust keeps no translation table of its own — only
+// the English fallback shown in the brief moment before the main window mounts.
+struct TrayMenuItems {
+    show: MenuItem<tauri::Wry>,
+    hide: MenuItem<tauri::Wry>,
+    quit: MenuItem<tauri::Wry>,
 }
 
 fn db_conn() -> Result<rusqlite::Connection, String> {
@@ -243,10 +253,18 @@ pub fn run() {
                 }
             });
 
-            let show = MenuItemBuilder::with_id("show", "显示 Echolink").build(app).unwrap();
-            let hide = MenuItemBuilder::with_id("hide", "隐藏").build(app).unwrap();
-            let quit = MenuItemBuilder::with_id("quit", "退出").build(app).unwrap();
+            // English here is only a pre-mount fallback; the main window pushes the
+            // user's language via set_tray_labels the moment it mounts. The real
+            // zh/en strings live only in the frontend i18n.
+            let show = MenuItemBuilder::with_id("show", "Show Echolink").build(app).unwrap();
+            let hide = MenuItemBuilder::with_id("hide", "Hide").build(app).unwrap();
+            let quit = MenuItemBuilder::with_id("quit", "Quit").build(app).unwrap();
             let menu = MenuBuilder::new(app).items(&[&show, &hide, &quit]).build().unwrap();
+            app.manage(TrayMenuItems {
+                show: show.clone(),
+                hide: hide.clone(),
+                quit: quit.clone(),
+            });
 
             let _tray = TrayIconBuilder::new()
                 .menu(&menu)
@@ -332,6 +350,7 @@ pub fn run() {
             inject_text,
             get_app_version,
             is_main_focused,
+            set_tray_labels,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -457,7 +476,7 @@ async fn delete_history(_app: tauri::AppHandle, id: String) -> Result<(), String
 }
 
 #[tauri::command]
-async fn transcribe_audio(audio_b64: String, settings: AppSettings) -> Result<String, String> {
+async fn transcribe_audio(audio_b64: String, settings: AppSettings, language: String) -> Result<String, String> {
     let client = reqwest::Client::new();
     let url = api_url(&settings.base_url, "/v1/audio/transcriptions");
     let audio_size = audio_b64.len();
@@ -467,7 +486,7 @@ async fn transcribe_audio(audio_b64: String, settings: AppSettings) -> Result<St
         .file_name("audio.webm")
         .mime_str("audio/webm")
         .map_err(|e| e.to_string())?;
-    let form = reqwest::multipart::Form::new().part("file", part).text("model", settings.model).text("response_format", "text");
+    let form = reqwest::multipart::Form::new().part("file", part).text("model", settings.model).text("response_format", "text").text("language", language);
 
     let resp = client
         .post(&url)
@@ -496,6 +515,8 @@ struct OpenRouterAudio {
 struct OpenRouterAsrRequest {
     model: String,
     input_audio: OpenRouterAudio,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    language: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -507,6 +528,7 @@ struct OpenRouterAsrResponse {
 async fn transcribe_audio_openrouter(
     audio_b64: String,
     settings: AppSettings,
+    language: String,
 ) -> Result<String, String> {
     let client = reqwest::Client::new();
     let url = api_url(&settings.base_url, "/v1/audio/transcriptions");
@@ -522,6 +544,7 @@ async fn transcribe_audio_openrouter(
             data: audio_b64,
             format: "webm".to_string(),
         },
+        language: Some(language),
     };
 
     let resp = client
@@ -590,7 +613,7 @@ struct StepFunSseEvent {
 }
 
 #[tauri::command]
-async fn transcribe_audio_sse(audio_b64: String, settings: AppSettings, app: tauri::AppHandle) -> Result<String, String> {
+async fn transcribe_audio_sse(audio_b64: String, settings: AppSettings, language: String, app: tauri::AppHandle) -> Result<String, String> {
     let client = reqwest::Client::new();
     let url = api_url(&settings.base_url, "/v1/audio/asr/sse");
     let audio_size = audio_b64.len();
@@ -602,7 +625,7 @@ async fn transcribe_audio_sse(audio_b64: String, settings: AppSettings, app: tau
             input: StepFunInput {
                 transcription: StepFunTranscription {
                     model: settings.model.clone(),
-                    language: "zh".to_string(),
+                    language,
                     enable_itn: true,
                     enable_timestamp: false,
                 },
@@ -815,8 +838,40 @@ fn is_main_focused(app: tauri::AppHandle) -> bool {
         .unwrap_or(false)
 }
 
+// Receives already-translated tray labels from the frontend (the single source of
+// UI text) and applies them to the live menu items.
 #[tauri::command]
-async fn verify_connection(settings: AppSettings) -> Result<String, String> {
+fn set_tray_labels(
+    items: tauri::State<'_, TrayMenuItems>,
+    show: String,
+    hide: String,
+    quit: String,
+) -> Result<(), String> {
+    items.show.set_text(&show).map_err(|e| e.to_string())?;
+    items.hide.set_text(&hide).map_err(|e| e.to_string())?;
+    items.quit.set_text(&quit).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// Connection-check outcome. The backend returns a stable `code` + params instead
+// of prose so the frontend owns all display text (and its translation). `ok`
+// distinguishes a green result from a warning/error; transport failures still
+// surface as Err and are mapped to `api.verify.requestFailed` on the frontend.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VerifyResult {
+    ok: bool,
+    code: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    available: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    detail: Option<String>,
+}
+
+#[tauri::command]
+async fn verify_connection(settings: AppSettings) -> Result<VerifyResult, String> {
     let client = reqwest::Client::new();
     // OpenRouter only lists STT models behind the transcription modality filter;
     // the unfiltered /v1/models returns chat models and never contains the ASR id.
@@ -838,7 +893,13 @@ async fn verify_connection(settings: AppSettings) -> Result<String, String> {
     match resp.status().as_u16() {
         401 | 403 => {
             log::error!("verify_connection → 401/403");
-            Err("❌ API Key 无效或已过期".to_string())
+            Ok(VerifyResult {
+                ok: false,
+                code: "invalidKey".to_string(),
+                model: None,
+                available: None,
+                detail: None,
+            })
         }
         200..=299 => {
             let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
@@ -852,19 +913,30 @@ async fn verify_connection(settings: AppSettings) -> Result<String, String> {
                 .unwrap_or_default();
 
             if models.contains(&settings.model.as_str()) {
-                Ok(format!(
-                    "✅ 连接成功，模型 {} 可用",
-                    settings.model
-                ))
+                Ok(VerifyResult {
+                    ok: true,
+                    code: "modelAvailable".to_string(),
+                    model: Some(settings.model.clone()),
+                    available: None,
+                    detail: None,
+                })
             } else {
-                let available = models.join(", ");
-                Err(format!(
-                    "⚠️ 端点与 Key 有效，但模型 '{}' 不在可用列表中：{}",
-                    settings.model, available
-                ))
+                Ok(VerifyResult {
+                    ok: false,
+                    code: "modelNotListed".to_string(),
+                    model: Some(settings.model.clone()),
+                    available: Some(models.join(", ")),
+                    detail: None,
+                })
             }
         }
-        _ => Err(format!("❌ 服务端返回错误: {}", resp.status())),
+        _ => Ok(VerifyResult {
+            ok: false,
+            code: "serverError".to_string(),
+            model: None,
+            available: None,
+            detail: Some(resp.status().to_string()),
+        }),
     }
 }
 

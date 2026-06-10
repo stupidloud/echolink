@@ -8,11 +8,11 @@
           v-model="searchQuery"
           type="text"
           class="search-input"
-          placeholder="搜索..."
+          :placeholder="$t('history.searchPlaceholder')"
         />
       </div>
       <div class="time-filter">
-        <span>全部</span>
+        <span>{{ $t('history.all') }}</span>
         <ChevronDown class="filter-icon" />
       </div>
     </div>
@@ -20,11 +20,11 @@
     <!-- Table -->
     <div class="table-container">
       <div class="table-header">
-        <span class="col col-time">时间戳</span>
-        <span class="col col-text">转录文本片段预览</span>
-        <span class="col col-protocol">所用接口协议</span>
-        <span class="col col-app">目标灌入应用</span>
-        <span class="col col-actions">操作</span>
+        <span class="col col-time">{{ $t('history.colTime') }}</span>
+        <span class="col col-text">{{ $t('history.colText') }}</span>
+        <span class="col col-protocol">{{ $t('history.colProtocol') }}</span>
+        <span class="col col-app">{{ $t('history.colApp') }}</span>
+        <span class="col col-actions">{{ $t('history.colActions') }}</span>
       </div>
 
       <div v-for="row in filteredRows" :key="row.id" class="table-row">
@@ -38,7 +38,7 @@
         </div>
       </div>
 
-      <div v-if="rows.length === 0" class="table-empty">暂无历史记录</div>
+      <div v-if="rows.length === 0" class="table-empty">{{ $t('history.empty') }}</div>
     </div>
   </div>
 </template>

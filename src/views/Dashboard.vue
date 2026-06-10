@@ -1,9 +1,9 @@
 <template>
   <div class="dashboard">
     <div class="header">
-      <h1 class="header-title">自然说话，完美书写 – 在任何应用中</h1>
+      <h1 class="header-title">{{ $t('dashboard.title') }}</h1>
       <div class="badge">
-        <span>核心操作：按住 [Right Alt] 键开始录音，松开停止并转换</span>
+        <span>{{ $t('dashboard.badge') }}</span>
       </div>
     </div>
 
@@ -11,31 +11,31 @@
       <div class="stats-row">
         <div class="stat-card">
           <div class="chart-placeholder"></div>
-          <p class="card-title">整体个性化 0%</p>
-          <a href="#" class="card-link">查看报告</a>
+          <p class="card-title">{{ $t('dashboard.personalization') }}</p>
+          <a href="#" class="card-link">{{ $t('dashboard.viewReport') }}</a>
         </div>
         <div class="stat-card">
           <p class="card-value">{{ totalMinutes }} min</p>
-          <p class="card-label">总口述时间</p>
+          <p class="card-label">{{ $t('dashboard.totalTime') }}</p>
         </div>
       </div>
       <div class="stats-row">
         <div class="stat-card">
-          <p class="card-value">{{ totalChars }} 字</p>
-          <p class="card-label">口述字数</p>
+          <p class="card-value">{{ totalChars }} {{ $t('dashboard.unitChars') }}</p>
+          <p class="card-label">{{ $t('dashboard.dictatedChars') }}</p>
         </div>
         <div class="stat-card">
-          <p class="card-value">{{ avgSpeed }} 字/分钟</p>
-          <p class="card-label">平均口述速度</p>
+          <p class="card-value">{{ avgSpeed }} {{ $t('dashboard.unitSpeed') }}</p>
+          <p class="card-label">{{ $t('dashboard.avgSpeed') }}</p>
         </div>
       </div>
     </div>
 
     <div class="transcript-box">
-      <label class="transcript-label">最近一次转录结果</label>
-      <p class="transcript-text">{{ transcript || '等待语音输入...' }}</p>
+      <label class="transcript-label">{{ $t('dashboard.lastTranscript') }}</label>
+      <p class="transcript-text">{{ transcript || $t('dashboard.waiting') }}</p>
       <div v-if="isRecording" class="recording-indicator">
-        <span class="rec-dot"></span>录音中 {{ recordingDuration.toFixed(1) }}s
+        <span class="rec-dot"></span>{{ $t('dashboard.recording') }} {{ recordingDuration.toFixed(1) }}s
       </div>
     </div>
   </div>
@@ -43,8 +43,11 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+
+const { t } = useI18n()
 
 // Recording + transcription now live in the overlay window (so they survive the
 // main window being closed/destroyed). The dashboard is a pure display: it
@@ -102,7 +105,7 @@ onMounted(async () => {
   } catch {}
   try {
     unlistens.push(await listen('mic-denied', () => {
-      transcript.value = '⚠️ 无法访问麦克风，请在系统设置中授予权限后重试'
+      transcript.value = t('dashboard.micDenied')
     }))
   } catch {}
 

@@ -5,34 +5,51 @@
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-top">
-        <div class="app-icon"></div>
+        <svg class="app-icon" viewBox="0 0 40 40" aria-hidden="true">
+          <g fill="#C8B496">
+            <rect x="4"  y="15" width="4" height="10" rx="2"/>
+            <rect x="11" y="10" width="4" height="20" rx="2"/>
+            <rect x="18" y="5"  width="4" height="30" rx="2"/>
+            <rect x="25" y="10" width="4" height="20" rx="2"/>
+            <rect x="32" y="15" width="4" height="10" rx="2"/>
+          </g>
+        </svg>
         <span class="app-title">Echolink</span>
       </div>
 
       <nav class="sidebar-menu">
         <router-link to="/dashboard" class="menu-item" active-class="active">
           <Home class="menu-icon" />
-          <span>首页看板</span>
+          <span>{{ $t('nav.dashboard') }}</span>
         </router-link>
         <router-link to="/history" class="menu-item" active-class="active">
           <History class="menu-icon" />
-          <span>历史记录</span>
+          <span>{{ $t('nav.history') }}</span>
         </router-link>
         <router-link to="/api-settings" class="menu-item" active-class="active">
           <Server class="menu-icon" />
-          <span>API 服务器设置</span>
+          <span>{{ $t('nav.apiSettings') }}</span>
         </router-link>
       </nav>
 
       <div class="sidebar-bottom">
+        <div class="lang-switch" role="group" :aria-label="$t('sidebar.language')">
+          <button
+            v-for="l in ['zh', 'en']"
+            :key="l"
+            class="lang-btn"
+            :class="{ active: locale === l }"
+            @click="changeLang(l)"
+          >{{ l === 'zh' ? '中' : 'EN' }}</button>
+        </div>
         <div class="icon-row">
           <div class="user-avatar"></div>
           <Settings class="icon-btn" />
           <HelpCircle class="icon-btn" />
         </div>
         <div class="pro-card">
-          <p class="pro-text">按住 Right Alt 开始录音，松开停止并转换</p>
-          <button class="upgrade-btn">了解更多</button>
+          <p class="pro-text">{{ $t('sidebar.proText') }}</p>
+          <button class="upgrade-btn">{{ $t('sidebar.learnMore') }}</button>
         </div>
       </div>
     </aside>
@@ -54,27 +71,48 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Home, History, Server, Settings, HelpCircle } from 'lucide-vue-next'
+import { invoke } from '@tauri-apps/api/core'
 import { listen, emit } from '@tauri-apps/api/event'
+import { setLocale } from './i18n'
 
 // True only inside the standalone overlay window, which loads index.html#/overlay.
 // In that window we skip the sidebar/main/floating chrome entirely.
 const isOverlay = window.location.hash.startsWith('#/overlay')
 
+const { t, locale } = useI18n()
+const changeLang = (l) => setLocale(l)
+
+// The frontend owns all UI text, including the native tray menu: push the
+// translated labels to Rust on startup and whenever the language changes. Only the
+// main window does this (the overlay shares the same App root but has no chrome).
+async function syncTrayLabels() {
+  if (isOverlay) return
+  try {
+    await invoke('set_tray_labels', {
+      show: t('tray.show'),
+      hide: t('tray.hide'),
+      quit: t('tray.quit'),
+    })
+  } catch {
+    // browser fallback / command unavailable
+  }
+}
+watch(locale, syncTrayLabels)
+
 const isRecording = ref(false)
 const barHeights = ref([8, 8, 8, 8, 8])
 
-const statusText = computed(() => {
-  if (isRecording.value) return '正在录音...'
-  return '按住 Right Alt 开始语音输入'
-})
+const statusText = computed(() => isRecording.value ? t('status.recording') : t('status.idle'))
 
   let unlisten = null
   let unlistenLevel = null
   let unlistenKeys = null
 
   onMounted(async () => {
+    syncTrayLabels()
     try {
       unlisten = await listen('recording-state', (event) => {
         isRecording.value = event.payload
@@ -167,8 +205,7 @@ body {
 .app-icon {
   width: 40px;
   height: 40px;
-  background: #3B82F6;
-  border-radius: 50%;
+  flex: none;
 }
 
 .app-title {
@@ -218,6 +255,32 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.lang-switch {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: #2A2A2A;
+  border-radius: 999px;
+  align-self: flex-start;
+}
+
+.lang-btn {
+  border: none;
+  background: transparent;
+  color: #777777;
+  font-size: 12px;
+  font-weight: bold;
+  padding: 4px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.lang-btn.active {
+  background: #C8B496;
+  color: #FFFFFF;
 }
 
 .icon-row {

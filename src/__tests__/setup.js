@@ -1,4 +1,12 @@
 import { vi } from 'vitest'
+import { config } from '@vue/test-utils'
+import { i18n, setLocale } from '../i18n'
+
+// Tests were written against the Chinese UI strings, so pin the test locale to zh
+// (the app itself defaults to the system language). Installing i18n globally gives
+// every mounted component access to $t without per-test wiring.
+setLocale('zh')
+config.global.plugins = [i18n]
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
