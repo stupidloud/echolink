@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EchoLink · 桌面语音输入法</title>
+<meta name="description" content="按住右 Alt 说话，松开即转写成文字，自动输入到任何应用。EchoLink 桌面语音输入法。" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231A1A1A'/%3E%3Cg fill='%23C8B496'%3E%3Crect x='7' y='13' width='2.6' height='6' rx='1.3'/%3E%3Crect x='12' y='9' width='2.6' height='14' rx='1.3'/%3E%3Crect x='17' y='6' width='2.6' height='20' rx='1.3'/%3E%3Crect x='22' y='11' width='2.6' height='10' rx='1.3'/%3E%3C/g%3E%3C/svg%3E" />
+<style>
+  :root{
+    --ink:#1A1A1A;
+    --muted:#7c766c;
+    --cream:#F4F2EF;
+    --cream-2:#ECE7DF;
+    --line:#E5E2DD;
+    --gold:#C8B496;
+    --gold-deep:#b39a72;
+    --card:#FFFFFF;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #fff 0%, rgba(255,255,255,0) 60%),
+      linear-gradient(180deg,var(--cream) 0%, var(--cream-2) 100%);
+    min-height:100vh;
+    display:flex;flex-direction:column;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  a{color:inherit;text-decoration:none}
+
+  /* top bar */
+  header{
+    width:100%;max-width:1080px;margin:0 auto;
+    padding:22px 28px;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .brand-mini{display:flex;align-items:center;gap:10px;font-weight:650;letter-spacing:.2px}
+  .brand-mini svg{display:block}
+  .topnav{display:flex;align-items:center;gap:8px}
+  .ghost{
+    display:inline-flex;align-items:center;gap:7px;
+    padding:8px 13px;border-radius:999px;
+    font-size:14px;color:var(--muted);
+    border:1px solid transparent;transition:.18s ease;
+  }
+  .ghost:hover{color:var(--ink);background:rgba(0,0,0,.04)}
+  .lang{
+    border:1px solid var(--line);border-radius:999px;
+    padding:5px;display:flex;gap:2px;background:rgba(255,255,255,.5)
+  }
+  .lang button{
+    font:inherit;font-size:13px;cursor:pointer;border:0;background:transparent;
+    color:var(--muted);padding:5px 12px;border-radius:999px;transition:.18s ease;
+  }
+  .lang button.active{background:var(--ink);color:#fff}
+
+  /* hero */
+  main{flex:1;display:flex;align-items:center;justify-content:center;padding:24px}
+  .hero{max-width:680px;text-align:center;animation:rise .7s cubic-bezier(.2,.7,.2,1) both}
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+  .mark{
+    width:108px;height:108px;margin:0 auto 30px;
+    border-radius:30px;
+    background:linear-gradient(160deg,#222 0%, #111 100%);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 18px 50px -18px rgba(26,26,26,.55), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .wave rect{transform-box:fill-box;transform-origin:center;animation:bar 1.5s ease-in-out infinite}
+  .wave rect:nth-child(1){animation-delay:0s}
+  .wave rect:nth-child(2){animation-delay:.18s}
+  .wave rect:nth-child(3){animation-delay:.36s}
+  .wave rect:nth-child(4){animation-delay:.12s}
+  .wave rect:nth-child(5){animation-delay:.30s}
+  @keyframes bar{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
+  @media (prefers-reduced-motion:reduce){.wave rect{animation:none;transform:scaleY(1)}}
+
+  .pill{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:7px 15px 7px 12px;margin-bottom:22px;border-radius:999px;
+    background:rgba(255,255,255,.7);border:1px solid var(--line);
+    font-size:13px;color:#5a544a;font-weight:520;
+    box-shadow:0 4px 14px -8px rgba(0,0,0,.2);backdrop-filter:blur(6px);
+  }
+  .pill b{color:var(--ink);font-weight:680}
+  .pill .oss{
+    display:inline-flex;align-items:center;gap:5px;
+    padding:2px 9px;border-radius:999px;
+    background:linear-gradient(120deg,var(--gold-deep),var(--gold));color:#fff;font-weight:650;
+  }
+  .pill .sep{width:1px;height:13px;background:var(--line)}
+
+  h1{font-size:clamp(38px,7vw,60px);line-height:1.04;letter-spacing:-1.4px;font-weight:720}
+  h1 .echo{color:var(--ink)}
+  h1 .link{
+    background:linear-gradient(120deg,var(--gold-deep),var(--gold));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .tag{margin-top:22px;font-size:clamp(17px,2.6vw,21px);line-height:1.55;color:#3a352e;font-weight:480}
+  .sub{margin-top:14px;font-size:15px;color:var(--muted);line-height:1.6}
+
+  .kbd{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:3px 9px;margin:0 2px;border-radius:7px;
+    background:#fff;border:1px solid var(--line);
+    box-shadow:0 2px 0 var(--line);
+    font-size:.86em;font-weight:600;color:var(--ink);
+    vertical-align:baseline;
+  }
+
+  .cta{margin-top:36px;display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+  .btn{
+    display:inline-flex;align-items:center;gap:10px;
+    padding:14px 24px;border-radius:14px;font-size:15.5px;font-weight:600;
+    transition:.2s cubic-bezier(.2,.7,.2,1);cursor:pointer;border:1px solid transparent;
+  }
+  .btn svg{width:19px;height:19px;flex:none}
+  .btn-primary{background:var(--ink);color:#fff;box-shadow:0 12px 26px -12px rgba(26,26,26,.6)}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 18px 34px -14px rgba(26,26,26,.6)}
+  .btn-secondary{background:#fff;color:var(--ink);border-color:var(--line)}
+  .btn-secondary:hover{transform:translateY(-2px);border-color:var(--gold);box-shadow:0 12px 26px -14px rgba(0,0,0,.18)}
+  .allver{margin-top:18px;font-size:13.5px;color:var(--muted)}
+  .allver a{border-bottom:1px solid var(--line);padding-bottom:1px;transition:.18s}
+  .allver a:hover{color:var(--ink);border-color:var(--gold)}
+
+  /* features strip */
+  .feats{
+    margin-top:40px;display:flex;gap:26px;justify-content:center;flex-wrap:wrap;
+    color:var(--muted);font-size:13.5px;
+  }
+  .feats span{display:inline-flex;align-items:center;gap:7px}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--gold)}
+
+  footer{
+    width:100%;max-width:1080px;margin:0 auto;
+    padding:22px 28px;display:flex;align-items:center;justify-content:space-between;
+    gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted);border-top:1px solid var(--line);
+  }
+  footer a:hover{color:var(--ink)}
+
+  [data-en]{display:none}
+  html[lang="en"] [data-zh]{display:none}
+  html[lang="en"] [data-en]{display:inline}
+  html[lang="en"] [data-en].blk{display:block}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand-mini">
+    <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="8" fill="#1A1A1A"/>
+      <g fill="#C8B496">
+        <rect x="7" y="13" width="2.6" height="6" rx="1.3"/>
+        <rect x="12" y="9" width="2.6" height="14" rx="1.3"/>
+        <rect x="17" y="6" width="2.6" height="20" rx="1.3"/>
+        <rect x="22" y="11" width="2.6" height="10" rx="1.3"/>
+      </g>
+    </svg>
+    EchoLink
+  </div>
+  <nav class="topnav">
+    <a class="ghost" href="https://github.com/stupidloud/echolink" target="_blank" rel="noopener">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+    <div class="lang" role="group" aria-label="language">
+      <button id="zh" class="active" onclick="setLang('zh')">中</button>
+      <button id="en" onclick="setLang('en')">EN</button>
+    </div>
+  </nav>
+</header>
+
+<main>
+  <div class="hero">
+    <div class="mark">
+      <svg class="wave" width="56" height="56" viewBox="0 0 56 56" aria-label="EchoLink">
+        <g fill="#E8DCC4">
+          <rect x="8"  y="22" width="5" height="12" rx="2.5"/>
+          <rect x="18" y="14" width="5" height="28" rx="2.5"/>
+          <rect x="28" y="8"  width="5" height="40" rx="2.5"/>
+          <rect x="38" y="14" width="5" height="28" rx="2.5"/>
+          <rect x="48" y="22" width="5" height="12" rx="2.5" transform="translate(-4 0)"/>
+        </g>
+      </svg>
+    </div>
+
+    <div class="pill">
+      <span class="oss">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48l-.01-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.94.36.31.68.92.68 1.85l-.01 2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>
+        <span data-zh>开源免费</span><span data-en>Open source</span>
+      </span>
+      <span class="sep"></span>
+      <span data-zh><b>闪电说</b> 的开源替代品</span><span data-en>An open-source <b>Typeless</b> alternative</span>
+    </div>
+
+    <h1><span class="echo">Echo</span><span class="link">Link</span></h1>
+
+    <p class="tag">
+      <span data-zh>按住 <span class="kbd">右 Alt</span> 说话，松开即转写成文字，<br>自动输入到你正在用的任何应用。</span>
+      <span data-en>Hold <span class="kbd">Right Alt</span> to talk. Release, and your speech<br>is typed straight into whatever app you're using.</span>
+    </p>
+
+    <p class="sub">
+      <span data-zh>桌面语音输入法 · Windows &amp; macOS · 用你自己的识别服务，录音不上云。</span>
+      <span data-en>Desktop voice typing · Windows &amp; macOS · Your own ASR keys, nothing uploaded to us.</span>
+    </p>
+
+    <div class="cta">
+      <a class="btn btn-primary" href="https://github.com/stupidloud/echolink/releases/latest" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.6 10.4 4.6v7.2H3V5.6Zm0 12.8 7.4 1V12.8H3v5.6Zm8.4 1.1L21 21V12.8h-9.6v6.7Zm0-15.1V11.8H21V3l-9.6 1.4Z"/></svg>
+        <span data-zh>下载 Windows 版</span><span data-en>Download for Windows</span>
+      </a>
+      <a class="btn btn-secondary" href="https://github.com/stupidloud/echolink/releases/latest" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 12.04c-.03-2.6 2.12-3.85 2.22-3.91-1.21-1.77-3.1-2.01-3.76-2.04-1.6-.16-3.12.94-3.93.94-.81 0-2.06-.92-3.39-.89-1.74.03-3.35 1.01-4.25 2.57-1.81 3.14-.46 7.79 1.3 10.34.86 1.25 1.89 2.65 3.23 2.6 1.3-.05 1.79-.84 3.36-.84 1.57 0 2.01.84 3.39.81 1.4-.02 2.29-1.27 3.14-2.53.99-1.45 1.4-2.85 1.42-2.93-.03-.01-2.73-1.05-2.76-4.16Zm-2.59-7.65c.72-.87 1.2-2.07 1.07-3.27-1.03.04-2.28.69-3.02 1.55-.66.77-1.24 2-1.08 3.18 1.15.09 2.32-.59 3.03-1.46Z"/></svg>
+        <span data-zh>下载 macOS 版</span><span data-en>Download for macOS</span>
+      </a>
+    </div>
+
+    <p class="allver">
+      <a href="https://github.com/stupidloud/echolink/releases" target="_blank" rel="noopener">
+        <span data-zh>查看所有版本 / 历史发行 →</span><span data-en>All releases & changelog →</span>
+      </a>
+    </p>
+
+    <div class="feats">
+      <span><i class="dot"></i><span data-zh>开源免费 · 代码可审计</span><span data-en>Free &amp; open source</span></span>
+      <span><i class="dot"></i><span data-zh>全局热键录音</span><span data-en>Global push-to-talk</span></span>
+      <span><i class="dot"></i><span data-zh>实时流式转写</span><span data-en>Live streaming ASR</span></span>
+      <span><i class="dot"></i><span data-zh>托盘常驻 · 单实例</span><span data-en>Tray-resident · single instance</span></span>
+      <span><i class="dot"></i><span data-zh>本地历史看板</span><span data-en>Local history & stats</span></span>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span>© EchoLink</span>
+  <span>
+    <span data-zh>开源于 </span><span data-en>Open source on </span>
+    <a href="https://github.com/stupidloud/echolink" target="_blank" rel="noopener" style="border-bottom:1px solid var(--line)">GitHub</a>
+  </span>
+</footer>
+
+<script>
+  function setLang(l){
+    document.documentElement.lang = (l === 'en') ? 'en' : 'zh-CN';
+    document.getElementById('zh').classList.toggle('active', l !== 'en');
+    document.getElementById('en').classList.toggle('active', l === 'en');
+    try{ localStorage.setItem('echolink-lang', l); }catch(e){}
+  }
+  (function(){
+    var saved;
+    try{ saved = localStorage.getItem('echolink-lang'); }catch(e){}
+    if(!saved){ saved = (navigator.language||'').toLowerCase().startsWith('zh') ? 'zh' : 'en'; }
+    setLang(saved);
+  })();
+</script>
+</body>
+</html>
