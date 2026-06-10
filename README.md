@@ -2,6 +2,10 @@
 
 EchoLink 是一款桌面**语音输入法**:在任何应用里按住 **Right Alt(右 Alt 键)** 说话,松开即把你说的话转写成文字,自动输入到当前光标处。
 
+> 🌐 **官网 / 下载**:<https://stupidloud.github.io/echolink/> · 中英双语界面
+
+![EchoLink 看板](docs/screenshots/dashboard.png)
+
 ## 功能特性
 
 - 🎙️ **全局语音输入** —— 按住 Right Alt 录音,松开自动转写,并把文字输入到当前聚焦的应用(浏览器、聊天工具、编辑器……)。
@@ -12,13 +16,14 @@ EchoLink 是一款桌面**语音输入法**:在任何应用里按住 **Right Alt
 - 🌊 **桌面悬浮指示器** —— 录音时屏幕底部中央出现波形小药丸;当你正停留在 EchoLink 主窗口时自动隐藏(主界面已有波形条)。
 - 📊 **看板与历史** —— 统计口述字数 / 时长 / 速度,保留历史转录记录。
 - 🔔 **托盘常驻 + 单实例** —— 关闭窗口后仍在系统托盘运行,点击托盘图标恢复;重复启动只会激活已有窗口,不会开新进程。
+- 🌍 **中英双语界面** —— 跟随系统语言,可在侧边栏一键切换 中 / EN;发往识别服务的语种也随界面语言。
 
 ## 安装
 
 从 [Releases](https://github.com/stupidloud/echolink/releases) 下载对应系统的安装包:
 
-- **Windows**:`.msi` 或 `.exe`(NSIS 安装器)
-- **macOS**:`.dmg`
+- **Windows**:`-setup.exe`(NSIS 安装器)
+- **macOS**:`.dmg`(Intel 用 `x64`,Apple Silicon 用 `aarch64`)
 
 首次运行需授予权限:
 

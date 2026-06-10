@@ -142,6 +142,29 @@
   }
   footer a:hover{color:var(--ink)}
 
+  /* screenshots */
+  .shots{
+    max-width:1180px;margin:0 auto;padding:20px 28px 64px;
+  }
+  .shots h2{
+    text-align:center;font-size:clamp(22px,3.4vw,30px);letter-spacing:-.6px;
+    font-weight:680;margin-bottom:8px;
+  }
+  .shots p.lead{text-align:center;color:var(--muted);font-size:15px;margin-bottom:34px}
+  .shot-grid{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:22px;
+  }
+  @media (max-width:880px){.shot-grid{grid-template-columns:1fr;max-width:560px;margin:0 auto}}
+  figure.shot{margin:0}
+  figure.shot img{
+    width:100%;height:auto;display:block;border-radius:14px;
+    border:1px solid var(--line);background:var(--card);
+    box-shadow:0 16px 40px -22px rgba(26,26,26,.5);
+  }
+  figure.shot figcaption{
+    margin-top:12px;text-align:center;font-size:13.5px;color:var(--muted);font-weight:520;
+  }
+
   [data-en]{display:none}
   html[lang="en"] [data-zh]{display:none}
   html[lang="en"] [data-en]{display:inline}
@@ -236,6 +259,30 @@
     </div>
   </div>
 </main>
+
+<section class="shots">
+  <h2>
+    <span data-zh>一眼看懂</span><span data-en>See it in action</span>
+  </h2>
+  <p class="lead">
+    <span data-zh>看板 · 历史记录 · API 设置 —— 简洁的桌面体验，中英双语。</span>
+    <span data-en>Dashboard · History · API settings — a clean desktop experience, bilingual.</span>
+  </p>
+  <div class="shot-grid">
+    <figure class="shot">
+      <img src="screenshots/dashboard.png" alt="EchoLink dashboard" loading="lazy" />
+      <figcaption><span data-zh>看板：口述统计与实时转写</span><span data-en>Dashboard: dictation stats & live transcript</span></figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="screenshots/history.png" alt="EchoLink history" loading="lazy" />
+      <figcaption><span data-zh>历史：转录记录，可搜索</span><span data-en>History: searchable transcription log</span></figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="screenshots/settings.png" alt="EchoLink API settings" loading="lazy" />
+      <figcaption><span data-zh>设置：填入自己的识别服务</span><span data-en>Settings: plug in your own ASR service</span></figcaption>
+    </figure>
+  </div>
+</section>
 
 <footer>
   <span>© EchoLink</span>
