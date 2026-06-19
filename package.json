@@ -27,7 +27,6 @@
     "vue-router": "^4.2.0"
   },
   "devDependencies": {
-    "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/cli": "^2.11.2",
     "@testing-library/vue": "^8.1.0",
     "@vitejs/plugin-vue": "^5.0.0",

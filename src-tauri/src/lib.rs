@@ -1,15 +1,9 @@
-use std::sync::Mutex;
 use tauri::{
     menu::{MenuBuilder, MenuItem, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
 };
 use tauri_plugin_store::StoreExt;
-
-#[derive(Default)]
-struct AppState {
-    is_recording: bool,
-}
 
 // Handles to the tray menu items. The frontend i18n is the single source of UI
 // text, so it pushes translated labels here (at startup and on every language
@@ -171,9 +165,6 @@ fn show_or_create_main(app: &tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    #[allow(unused_variables)]
-    let state = Mutex::new(AppState::default());
-
     tauri::Builder::default()
         // Must be registered first: a second launch focuses the existing window
         // instead of starting another process.

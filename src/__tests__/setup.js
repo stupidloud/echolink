@@ -10,7 +10,6 @@ config.global.plugins = [i18n]
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
-  convertFileSrc: vi.fn(),
 }))
 
 vi.mock('@tauri-apps/plugin-clipboard-manager', () => ({
