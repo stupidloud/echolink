@@ -191,33 +191,20 @@ pub fn run() {
         .setup(|app| {
             log::info!("Rust backend started");
 
-            #[cfg(target_os = "windows")]
-            {
-                // Use the crate's own re-exported `windows` types: it depends on a
-                // different `windows` version than this app, so VK__none_ must come
-                // from KeyboardAndMouse here or the VIRTUAL_KEY types won't match.
-                use prevent_alt_win_menu::event_handler::{
-                    Config, HoldEvent, KeyboardAndMouse, MenuTrigger, MenuTriggerEvent,
-                };
-                // Only suppress the Alt window menu (Right Alt is our push-to-talk
-                // key). Leave the Win key alone so the Start menu still opens --
-                // the default config suppressed both.
-                let config: Config = Config::default().set_on_released(|hold: HoldEvent| {
-                    match hold.press.menu_trigger() {
-                        Some(MenuTrigger::Alt) => Some(KeyboardAndMouse::VK__none_),
-                        _ => None,
-                    }
-                });
-                let _ = prevent_alt_win_menu::start(config)
-                    .map_err(|e| log::error!("prevent-alt-win-menu: {:?}", e));
-            }
-
+            // Push-to-talk: grab the global keyboard so Right Alt (AltGr) can be
+            // SWALLOWED outright -- returning None consumes the event so it never
+            // reaches the foreground app. Plain `listen` only observed the key and
+            // let it through, so apps like Windows Notepad still saw Alt held down
+            // and lit up their menu bar (the Alt keydown reached them; suppressing
+            // only the menu trigger on release couldn't undo that). grab on the
+            // fufesou rdev fork suppresses via WH_KEYBOARD_LL on Windows and the
+            // CGEventTap on macOS, which also makes prevent-alt-win-menu redundant.
             let handle = app.handle().clone();
             std::thread::spawn(move || {
-                log::info!("rdev thread started");
+                log::info!("rdev grab thread started");
                 let cb_handle = handle.clone();
                 let mut alt_down = false;
-                if let Err(e) = rdev::listen(move |event| {
+                if let Err(e) = rdev::grab(move |event| {
                     match event.event_type {
                         rdev::EventType::KeyPress(rdev::Key::AltGr) => {
                             if !alt_down {
@@ -229,6 +216,7 @@ pub fn run() {
                                 // CSS off recording-state, not window show/hide.
                                 let _ = cb_handle.emit("recording-state", true);
                             }
+                            None
                         }
                         rdev::EventType::KeyRelease(rdev::Key::AltGr) => {
                             if alt_down {
@@ -236,11 +224,12 @@ pub fn run() {
                                 log::info!("AltGr released");
                                 let _ = cb_handle.emit("recording-state", false);
                             }
+                            None
                         }
-                        _ => {}
+                        _ => Some(event),
                     }
                 }) {
-                    log::error!("rdev listen error: {:?}", e);
+                    log::error!("rdev grab error: {:?}", e);
                 }
             });
 
