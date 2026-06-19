@@ -1,6 +1,6 @@
 [package]
 name = "echolink"
-version = "0.2.0"
+version = "0.2.1"
 description = "Echolink - 语音输入法桌面应用"
 authors = ["stupidloud"]
 license = ""
