@@ -37,6 +37,7 @@ dirs = "6"
 uuid = { version = "1", features = ["v4"] }
 chrono = "0.4"
 futures-util = "0.3"
+ferrous-opencc = "0.4"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 prevent-alt-win-menu = "0.2"

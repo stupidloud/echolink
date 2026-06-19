@@ -475,8 +475,34 @@ async fn delete_history(_app: tauri::AppHandle, id: String) -> Result<(), String
     Ok(())
 }
 
+// Normalize transcribed Chinese to the script the system locale implies, so the
+// inserted text matches the user's environment regardless of which script the ASR
+// backend happens to return. `script` is "Hans"/"Hant" (from the frontend's
+// navigator.language) or empty for non-Chinese. Converting toward the target is
+// safe even when the input is already that script — the source-script dictionary
+// keys simply don't match, so the text passes through unchanged. Latin text is a
+// no-op too. The embedded dictionaries need no external files at runtime.
+fn normalize_script(text: String, script: &str) -> String {
+    use ferrous_opencc::{config::BuiltinConfig, OpenCC};
+    let config = match script {
+        "Hans" => BuiltinConfig::T2s, // any Chinese -> Simplified
+        "Hant" => BuiltinConfig::S2t, // any Chinese -> Traditional
+        _ => return text,
+    };
+    if text.is_empty() {
+        return text;
+    }
+    match OpenCC::from_config(config) {
+        Ok(cc) => cc.convert(&text),
+        Err(e) => {
+            log::warn!("normalize_script init failed ({}), leaving text as-is", e);
+            text
+        }
+    }
+}
+
 #[tauri::command]
-async fn transcribe_audio(audio_b64: String, settings: AppSettings, language: String) -> Result<String, String> {
+async fn transcribe_audio(audio_b64: String, settings: AppSettings, language: String, script: String) -> Result<String, String> {
     let client = reqwest::Client::new();
     let url = api_url(&settings.base_url, "/v1/audio/transcriptions");
     let audio_size = audio_b64.len();
@@ -500,7 +526,15 @@ async fn transcribe_audio(audio_b64: String, settings: AppSettings, language: St
         log::error!("transcribe_audio HTTP {}", resp.status());
         return Err(format!("ASR error: {}", resp.status()));
     }
-    let text: String = resp.text().await.map_err(|e| e.to_string())?;
+    // Some OpenAI-compatible servers ignore response_format=text and always
+    // return JSON like {"text":"...","usage":{...}}. Try to extract the "text"
+    // field first; otherwise fall back to treating the body as plain text.
+    let body = resp.text().await.map_err(|e| e.to_string())?;
+    let text = serde_json::from_str::<serde_json::Value>(body.trim())
+        .ok()
+        .and_then(|v| v.get("text").and_then(|t| t.as_str()).map(|s| s.to_string()))
+        .unwrap_or(body);
+    let text = normalize_script(text, &script);
     log::info!("transcribe_audio → OK, len={}", text.len());
     Ok(text)
 }
@@ -529,6 +563,7 @@ async fn transcribe_audio_openrouter(
     audio_b64: String,
     settings: AppSettings,
     language: String,
+    script: String,
 ) -> Result<String, String> {
     let client = reqwest::Client::new();
     let url = api_url(&settings.base_url, "/v1/audio/transcriptions");
@@ -564,8 +599,9 @@ async fn transcribe_audio_openrouter(
     }
 
     let parsed: OpenRouterAsrResponse = resp.json().await.map_err(|e| e.to_string())?;
-    log::info!("transcribe_audio_openrouter → OK, len={}", parsed.text.len());
-    Ok(parsed.text)
+    let text = normalize_script(parsed.text, &script);
+    log::info!("transcribe_audio_openrouter → OK, len={}", text.len());
+    Ok(text)
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -613,7 +649,7 @@ struct StepFunSseEvent {
 }
 
 #[tauri::command]
-async fn transcribe_audio_sse(audio_b64: String, settings: AppSettings, language: String, app: tauri::AppHandle) -> Result<String, String> {
+async fn transcribe_audio_sse(audio_b64: String, settings: AppSettings, language: String, script: String, app: tauri::AppHandle) -> Result<String, String> {
     let client = reqwest::Client::new();
     let url = api_url(&settings.base_url, "/v1/audio/asr/sse");
     let audio_size = audio_b64.len();
@@ -730,6 +766,9 @@ async fn transcribe_audio_sse(audio_b64: String, settings: AppSettings, language
         }
     }
 
+    // Live deltas above were emitted raw; normalize the final text to the target
+    // script before the main window replaces the streamed text with it.
+    let full_text = normalize_script(full_text, &script);
     log::info!("transcribe_audio_sse → final_len={}", full_text.len());
     if !full_text.is_empty() {
         let _ = app.emit("transcript-done", full_text.clone());

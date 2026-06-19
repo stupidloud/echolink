@@ -36,6 +36,19 @@ export function currentLocale() {
   return resolveLocale()
 }
 
+// The Chinese script the system locale implies, for normalizing ASR output:
+//   'Hans' (Simplified) | 'Hant' (Traditional) | '' (non-Chinese, no conversion).
+// Derived from the RAW system/webview locale — the UI 中/EN toggle only chooses
+// 'zh'/'en' and carries no script, so we read navigator.language directly here.
+// TW/HK/MO regions and an explicit Hant subtag mean Traditional; any other zh* is
+// Simplified. Sent alongside the ASR request so the backend can convert the result.
+export function currentScript() {
+  const sys = (navigator.language || '').toLowerCase()
+  if (!sys.startsWith('zh')) return ''
+  if (sys.includes('hant') || sys.includes('-tw') || sys.includes('-hk') || sys.includes('-mo')) return 'Hant'
+  return 'Hans'
+}
+
 // Switch language at runtime and remember the choice across launches.
 export function setLocale(lang) {
   if (!SUPPORTED.includes(lang)) return
