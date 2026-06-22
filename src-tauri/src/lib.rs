@@ -203,12 +203,17 @@ pub fn run() {
             std::thread::spawn(move || {
                 log::info!("rdev grab thread started");
                 let cb_handle = handle.clone();
-                let mut alt_down = false;
+                // rdev::grab takes an `Fn` callback, so the press/release state can't
+                // be a plain captured `mut` local. AtomicBool gives interior
+                // mutability and stays Send + Sync regardless of how grab stores the
+                // callback per platform.
+                let alt_down = std::sync::atomic::AtomicBool::new(false);
+                use std::sync::atomic::Ordering;
                 if let Err(e) = rdev::grab(move |event| {
                     match event.event_type {
                         rdev::EventType::KeyPress(rdev::Key::AltGr) => {
-                            if !alt_down {
-                                alt_down = true;
+                            if !alt_down.load(Ordering::Relaxed) {
+                                alt_down.store(true, Ordering::Relaxed);
                                 log::info!("AltGr pressed");
                                 // The overlay window stays shown at all times (it
                                 // owns the pipeline and a hidden webview drops
@@ -219,8 +224,8 @@ pub fn run() {
                             None
                         }
                         rdev::EventType::KeyRelease(rdev::Key::AltGr) => {
-                            if alt_down {
-                                alt_down = false;
+                            if alt_down.load(Ordering::Relaxed) {
+                                alt_down.store(false, Ordering::Relaxed);
                                 log::info!("AltGr released");
                                 let _ = cb_handle.emit("recording-state", false);
                             }
